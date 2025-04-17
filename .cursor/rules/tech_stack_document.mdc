@@ -1,0 +1,88 @@
+---
+description: Apply these rules when making changes to the project
+globs: 
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# RivalRecon Tech Stack Document
+
+This document explains the technologies behind RivalRecon, our competitive intelligence tool. It's written in plain language to help everyone understand how each part of the system contributes to a smooth, effective, and delightful experience.
+
+## Frontend Technologies
+
+RivalRecon's frontend is all about creating an engaging and easy-to-use interface. Here's what we use:
+
+*   **React.js**: A leading framework for building dynamic user interfaces. It helps create interactive elements like our landing page, login screen, and interactive dashboard.
+*   **Chakra UI**: A component library for quickly styling our application with consistent design elements (colors, buttons, forms). It ensures the app looks clean and modern.
+*   **Framer Motion**: A tool for smooth animations. It makes transitions and hover effects on buttons and cards feel natural and engaging.
+*   **Plotly.js**: Used for interactive charts and graphs. It helps display data such as ratings trends, sentiment breakdowns, and competitive insights in an easy-to-understand way.
+*   **react-d3-cloud**: A modern library for generating word clouds based on D3. It visualizes frequently mentioned terms from product reviews in a way that's fully compatible with React 18+.
+*   **React Router**: Manages navigation between different pages (like switching between login and dashboard) so users have a seamless experience as they move around the app.
+
+These technologies ensure that RivalRecon is not only beautiful but also responsive, whether you're using it on a desktop or a mobile device.
+
+## Backend Technologies
+
+The backend handles everything behind the scenes – from processing data to managing user actions. Here's what powers our server-side operations:
+
+*   **Node.js and Express**: The backbone of our server, this combination creates and manages API routes for everything from scraping data to interacting with our database.
+
+*   **Celery with Redis**: For running tasks in the background (like scraping or heavy AI analysis), Celery helps us schedule tasks and Redis acts as the real-time message broker. This ensures that even time-consuming processes don't slow down your interaction with the app.
+
+*   **Supabase (PostgreSQL and Authentication)**: Supabase provides the database where we store users, their submissions, reviews, and all the detailed analysis reports. It ensures data is secure and quickly accessible. We will use supabase's native authentication features for sign in and sign up as well as state management. 
+
+*   **Scraping Tools**:
+
+    *   **Scrapy**: Specially used for Shopify-based e-commerce sites.
+    *   **Puppeteer**: It scrapes data from platforms like Yotpo, TrustPilot, Loox, and Judge.me.
+    *   **Rapid API**: Connects us with Amazon to gather review data.
+
+*   **DeepSeek API**: This is our AI-powered engine that analyzes the reviews to generate insights on ratings trends, positive/negative feedback, and competitive metrics.
+
+*   **Stripe**: Integrated as our payment processing system, it handles monthly subscriptions and ensures secure transactions.
+
+## Infrastructure and Deployment
+
+Robust infrastructure is key to making RivalRecon reliable and scalable. Our choices include:
+
+*   **Vercel**: Hosts the frontend, ensuring fast delivery of our React.js application with easy scalability and SSL support for security.
+*   **Railway**: Used for deploying the backend. Railway offers a simple, reliable way to run our Node.js server, maintaining smooth and responsive API performance.
+*   **Supabase**: Not only our database provider, but it also manages data storage efficiently and securely, making sure that all our user data and analysis reports are always available. Not only manages user authentication but also simplifies the login process.
+*   **Domain & SSL**: We use a custom domain (such as rivalrecon.com) secured with SSL (Secure Sockets Layer) to ensure that the data exchanged remains protected.
+*   **Version Control and CI/CD Pipelines**: While not detailed here, our development process leverages industry-standard version control systems and continuous integration/continuous deployment pipelines to ensure that updates are both safe and seamless.
+
+## Third-Party Integrations
+
+Several external services enhance RivalRecon's capabilities:
+
+*   **Stripe**: Handles secure subscription payments and tiered usage plans.
+*   **Rapid API**: Enables scraping and data collection from Amazon, broadening our review sources.
+*   **DeepSeek API**: Delivers AI-powered analysis of review texts, offering in-depth insights and competitive comparisons.
+
+These integrations allow us to provide robust functionality without reinventing the wheel, ensuring reliability and high performance.
+
+## Security and Performance Considerations
+
+We take security and performance seriously to ensure a smooth and safe user experience:
+
+*   **Authentication and Data Security**: Using supabase for user management as well as for secure data storage ensures that all user information and analysis data are well protected.
+*   **Rate Limiting and Usage Controls**: We enforce usage limits on the scraping functionality based on the user's subscription plan. This prevents abuse and ensures fair resource distribution.
+*   **Error Handling**: Clear error messages inform users if scraping or analysis fails, helping them understand when to retry or contact support.
+*   **Performance Optimizations**: By using asynchronous task queues (Celery with Redis), our system remains responsive. Tasks such as data scraping and AI analysis run in the background without delaying user interactions.
+*   **Modern Dependency Management**: We utilize modern libraries that are compatible with React 18+ and avoid legacy dependencies requiring `--legacy-peer-deps`, ensuring better stability and future-proofing.
+*   **Mobile Responsiveness**: The entire tech stack is optimized to work efficiently on both desktops and mobile devices, ensuring a consistent user experience everywhere.
+
+## Conclusion and Overall Tech Stack Summary
+
+In summary, RivalRecon's tech stack is built to deliver a fast, secure, and engaging experience. Here's a quick recap:
+
+*   **Frontend**: React.js, Chakra UI, Framer Motion, Plotly.js, react-d3-cloud, React Router – all chosen to create an intuitive and visually striking user interface with modern dependency compatibility.
+*   **Backend**: Node.js, Express, Celery, and Redis – powering robust API routes, task management, and data processing, with Supabase (PostgreSQL) as our secure database.
+*   **Third-Party Integrations**: Supabase for user authentication, Stripe for payments, DeepSeek API for AI insights, plus several specialized scraping tools (Scrapy, Puppeteer, Rapid API) to gather data.
+*   **Infrastructure**: Vercel for the frontend and Railway for the backend ensure smooth deployments and high reliability, supported by secure domains and robust version control practices.
+*   **Security & Performance**: Strong authentication, data protection, rate limiting, and responsive error handling keep the system secure and user-friendly.
+
+These choices align perfectly with our goal to empower CPG companies with actionable insights from product reviews, all delivered through a sophisticated yet easy-to-use platform. The tech stack underpins RivalRecon's unique ability to offer competitive intelligence with actionable, visually engaging insights.
+
+Thank you for reading this overview. We believe these technologies set RivalRecon apart by balancing innovation, scalability, and a top-notch user experience.

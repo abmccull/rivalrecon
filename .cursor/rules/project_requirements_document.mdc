@@ -1,0 +1,40 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# RivalRecon Project Requirements Document
+
+## 1. Project Overview
+
+RivalRecon is a competitive intelligence tool designed for CPG companies, helping them analyze product reviews from their own products as well as competitors'. The app lets users log in, submit a product URL, and then automatically scrapes reviews from shops powered by Shopify review apps (like Yotpo, TrustPilot, Loox, Judge.me) and Amazon via a Rapid API key. The tool then processes the review data with an AI (DeepSeek API) to provide insights on ratings trends, top positives and negatives, and competitive comparisons. The results are presented in a visually stunning, interactive dashboard that makes data easy to understand and action.
+
+## 2. In-Scope vs. Out-of-Scope
+
+**In-Scope:**
+
+*   User authentication and onboarding using Supabase Auth
+*   Product URL submission dashboard for initiating analyses
+*   Data scraping from Shopify-based review apps (Yotpo, TrustPilot, Loox, Judge.me) and Amazon using Rapid API
+*   Asynchronous processing of scraping tasks with Celery and Redis
+*   AI-powered analysis using DeepSeek API to generate insights, including ratings trends, top positives/negatives, and detailed competitive insights
+*   Interactive dashboards with visualizations (charts, word clouds, radar charts, scatter plots, heatmaps, and gauge charts) using Plotly.js and react-wordcloud
+*   Payment processing and subscription management via Stripe with defined monthly analysis limits
+*   Mobile responsiveness as well as a desktop-optimized interface
+*   Reporting options to export analysis as PDF or CSV
+
+**Out-of-Scope:**
+
+*   Integration with other e-commerce platforms
+*   Advanced machine learning models for sentiment analysis
+*   Real-time data integration with external databases
+*   Customizable dashboard themes and layouts
+*   Advanced reporting and analytics features
+*   Multi-language support
+*   Enterprise-level security and compliance
+*   Custom development and integration with existing systems
+*   Additional data sources and analysis capabilities
+*   Real-time alerts and notifications
+*   Multi-user and multi-tenant support
+*   Internationalization and localization
+*   

@@ -1,0 +1,77 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# Frontend Guideline Document
+
+This document provides an overview of the frontend architecture, design principles, and technologies used in the RivalRecon project. Designed as a competitive intelligence tool for CPG companies, RivalRecon offers a rich user experience that includes data visualization, interactive dashboards, and seamless user interactions. The document is intended for everyone, whether or not you have a technical background.
+
+## Frontend Architecture
+
+RivalRecon’s frontend is built using React.js, a widely popular JavaScript library for building user interfaces. The application is organized with a component-based architecture to promote reusability and clarity of the code. Here are key aspects of the architecture:
+
+- **Frameworks & Libraries**: The core of the application is built with React.js, supported by Chakra UI for the user interface, Framer Motion for animations, and Plotly.js along with react-wordcloud for data visualizations. React Router is used to manage the navigation between pages.
+- **Scalability & Maintainability**: The component-based structure ensures that each part of the application is modular and can be maintained independently. This setup allows new features to be added with minimal disruptions to existing code. Additionally, using popular libraries that are continuously maintained by the community ensures long-term support and scalability.
+- **Performance**: The architecture supports performance through techniques like lazy loading of components, code splitting, and the efficient rendering capabilities of React. These measures ensure that even as the application grows, users continue to experience fast and responsive interactions.
+
+## Design Principles
+
+In RivalRecon, the design principles are centered around creating a user-friendly and accessible experience:
+
+- **Usability**: The application emphasizes simplicity and clarity. Key functionalities (such as URL submission, dashboard navigation, and report viewing) are designed to be straightforward and intuitive.
+- **Accessibility**: Using Chakra UI and adhering to modern web standards ensures that the UI is accessible to a wide range of users. This includes providing clear, large fonts, and an interface that works well with assistive technologies.
+- **Responsiveness**: The design is mobile-responsive to accommodate various device sizes, ensuring that the dashboard and visualizations scale gracefully on desktops, tablets, and smartphones.
+
+## Styling and Theming
+
+The project follows a modern and clean styling approach to maintain a consistent look and feel throughout the application:
+
+- **CSS Methodology & Frameworks**: The style is managed using CSS-in-JS approaches provided by Chakra UI. This not only simplifies styling components but also ensures that styles are scoped locally. Styling principles such as BEM or SMACSS are implicit in the component designs.
+- **Theming & Visual Style**: The theming strategy is clearly aligned with the RivalRecon brand. The design style is modern with a slight glassmorphism influence in some areas to give a sleek and contemporary look. The chosen color palette includes Deep Blue, Teal, Pale Blue, and Dark Gray to foster trust and clarity.
+- **Fonts**: The primary font used throughout the application is Inter, selected for its readability and modern aesthetic.
+
+## Component Structure
+
+The application is built on a solid component-based approach that is central to React development:
+
+- **Organization**: Components are organized based on their functionality. For example, layout components (headers, footers, sidebars) reside in one directory, while interactive components for forms, dashboards, and visualizations reside in another.
+- **Reusability**: Each component is designed to be reusable across different parts of the application, reducing redundancy and helping maintain consistency. This modular approach speeds up development and simplifies debugging and testing.
+
+## State Management
+
+Managing state effectively is critical for providing a seamless user experience:
+
+- **Approach**: For this project, state management is handled using React’s built-in hooks and Context API. This means that data relevant to the entire application (like user authentication status and application settings) is stored in a central location and shared with components as needed.
+- **Benefits**: This approach keeps the codebase simpler, making it easier to track changes, debug issues, and scale the application as new features are added.
+
+## Routing and Navigation
+
+User-friendly navigation is handled with React Router, ensuring that moving between different sections of the application is smooth and efficient:
+
+- **Routing**: React Router maps different URL paths to their respective components. This allows for a single-page application experience where content updates without full page reloads.
+- **Navigation Structure**: The application includes a clear journey starting from the landing page to user authentication, followed by the main dashboard, and finally the report/export section. This logical flow ensures users can easily reach the features they need.
+
+## Performance Optimization
+
+Several strategies are implemented to ensure the frontend remains fast and responsive:
+
+- **Lazy Loading & Code Splitting**: Components are loaded on demand rather than all at once, reducing initial load times and improving performance.
+- **Asset Optimization**: Images, fonts, and other static assets are optimized and delivered using efficient strategies backed by the deployment environment (Vercel for the frontend).
+- **Smooth Animations**: Framer Motion is used to provide smooth transitions and animations that do not negatively impact the overall performance.
+
+## Testing and Quality Assurance
+
+Ensuring the quality and reliability of the frontend is vital. The testing strategy includes:
+
+- **Unit Testing**: Critical functionalities and individual components are tested using tools such as Jest and React Testing Library.
+- **Integration Testing**: Interaction between components is carefully tested to ensure that they work together as expected.
+- **End-to-End Testing**: Simulated user workflows, such as navigating from the login page to dashboard updates after URL submission, are tested using frameworks like Cypress. This helps catch issues that might occur during the user’s interaction with the application.
+
+## Conclusion and Overall Frontend Summary
+
+The frontend of RivalRecon is designed to deliver a modern, responsive, and user-centric experience. Built on React.js and enhanced by libraries such as Chakra UI, Framer Motion, and Plotly.js, the architecture is both scalable and maintainable. The design emphasizes usability, accessibility, and responsiveness, ensuring that users receive actionable insights through an intuitive dashboard. With a clear component structure, effective state management, smooth navigation, optimized performance, and rigorous testing, the frontend setup is aligned with the overall goals of providing fast, secure, and actionable insights in the world of competitive intelligence.
+
+This comprehensive guide reflects the project requirements and technologies utilized, ensuring that any team member—from non-technical stakeholders to experienced developers—can understand and contribute to the success of RivalRecon.

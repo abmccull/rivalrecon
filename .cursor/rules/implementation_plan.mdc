@@ -1,0 +1,98 @@
+---
+description: Apply these rules when making changes to the project
+globs: 
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# Implementation plan
+
+## Phase 1: Environment Setup
+
+1. **Prevalidation**: Check if the current directory is already a RivalRecon project (look for key folders like `/frontend` and `/backend`). Reference: Project Summary: Next Steps.
+2. **Install Core Tools**: Ensure Node.js (as required for backend) and npm are installed. (Since no specific versions are provided, use system defaults.) Reference: Tech Stack: Backend.
+3. **Directory Setup**: Create the following directories if they do not exist:
+   - `/frontend` for the React front-end
+   - `/backend` for the Node.js Express server
+   - `/backend/worker` for Celery task workers
+   Reference: Project Summary: Next Steps.
+4. **Cursor IDE Setup**: Since the IDE is Cursor, perform the following:
+   - Create a file `cursor_metrics.md` in the project root.
+   - Create a `.cursor` directory in the project root if it does not already exist.
+   
+
+## Phase 2: Frontend Development
+
+5. **Initialize React Project**: In the `/frontend` directory, initialize a new React project (e.g., using Create React App) to set up the base framework for RivalRecon. Reference: Tech Stack: Frontend.
+6. **Install Dependencies**: Install required packages:
+   - Chakra UI
+   - Framer Motion
+   - Plotly.js
+   - react-wordcloud
+   - React Router
+   Command example: `npm install @chakra-ui/react @emotion/react @emotion/styled framer-motion plotly.js react-wordcloud react-router-dom`
+   Reference: Project Summary: Key Features & Design Considerations.
+7. **Landing Page Component**: Create `/frontend/src/pages/LandingPage.js`. This page should clearly present the value proposition with a "Get Started" CTA. Reference: Design Considerations: Landing Page.
+8. **Dashboard Component**: Create `/frontend/src/pages/Dashboard.js` to serve as the interactive dashboard. Include areas for URL submission and a list of analysis history. Reference: Design Considerations: Dashboard.
+9. **Analysis Dashboard Components**: Develop React components for interactive visualizations using Plotly.js, react-wordcloud, and Chakra UI. Place these components under `/frontend/src/components/AnalysisCharts/` (e.g., `PieChart.js`, `LineChart.js`, `BarChart.js`, etc.). Reference: Key Features: Interactive Dashboard.
+10. **Authentication Integration**: Integrate Clerk for user authentication. Create a component (e.g., `/frontend/src/components/Auth/ClerkWrapper.js`) that handles Clerk-based sign-up/login. Reference: Key Features: User Authentication.
+11. **Validation**: Run the React development server (`npm start`) and verify that the Landing Page, Dashboard, and authentication flow render correctly.
+
+## Phase 3: Backend Development
+
+12. **Initialize Backend Project**: In the `/backend` directory, run `npm init` to initialize the Node.js project and create a `package.json` file. Reference: Tech Stack: Backend.
+13. **Install Dependencies**: Install Express and necessary middleware (e.g., body-parser, cors) by running `npm install express body-parser cors`. Reference: Tech Stack: Backend.
+14. **Express Server Setup**: Create `/backend/index.js` to initialize the Express server. Include middleware for JSON parsing and CORS.
+15. **User Authentication Middleware**: Integrate Clerk middleware into your Express server to validate user sessions on protected endpoints. Reference: Key Features: User Authentication.
+16. **Submissions API Endpoint**: Create a `POST /api/submissions` endpoint in `/backend/routes/submissions.js` to handle URL submissions for scraping. Reference: Key Features: Data Scraping.
+17. **Scraping Task Endpoint**: Create an endpoint (e.g., `POST /api/scrape`) to trigger scraping processes using Scrapy, Puppeteer, or Rapid API based on the URL submitted. Reference: Key Features: Data Scraping.
+18. **AI Analysis Endpoint**: Create an endpoint (e.g., `POST /api/analyze`) to process data through the DeepSeek API for sentiment analysis and trend determination. Reference: Key Features: AI Analysis.
+19. **Subscription API Endpoint**: Create a `POST /api/subscribe` endpoint for Stripe subscription management. Ensure that the endpoint enforces analysis limits (Free: 5, $19.99: 75, $49.99: 250). Reference: Key Features: Subscription Management & Usage Limits.
+20. **Error Handling Middleware**: Develop centralized error handling in `/backend/middleware/errorHandler.js` to return clear messages for scraping or AI analysis failures. Reference: Key Features: Error Handling.
+21. **Validation**: Use Postman or curl to test important endpoints (e.g., submit a URL or trigger analysis) and validate that responses are as expected.
+
+## Phase 4: Database and Asynchronous Tasks
+
+22. **Database Connection Setup**: In `/backend/config/db.js`, configure the connection to Supabase (PostgreSQL). Use the connection string provided by Supabase.
+23. **Database Schema Setup**: Create SQL migration scripts or use Supabase’s migration tool to set up the following tables:
+    - `users` (managed by Clerk; link via `user_id`)
+    - `submissions` (fields: url, user_id, status, created_at)
+    - `reviews` (fields: product_name, brand_name, category, overall_rating, review_text, review_date, submission_id)
+    - `analyses` (fields: submission_id, ratings_over_time, trending, top_positives, top_negatives, word_map, competitive_insights, opportunities, sentiment_comparison (JSON), feature_gaps (JSON), retention_risk (float), trend_alignment (JSON))
+   Reference: Database Schema (Supabase).
+24. **Validation**: Connect to Supabase and run a query to list the tables, confirming they exist and follow the schema.
+25. **Asynchronous Task Setup**: In `/backend/worker`, set up a Python virtual environment and install Celery and Redis libraries. Create a Celery worker file (e.g., `worker.py`) that defines tasks for handling scraping and AI analysis asynchronously.
+26. **Task Queue Integration**: Modify your Express endpoints (from Steps 16 and 18) to dispatch tasks to the Celery worker using a message broker (Redis). Reference: Key Features: Asynchronous Tasks.
+27. **Validation**: Dispatch a test task from the backend and check that it is picked up and processed by Celery via Redis.
+
+## Phase 5: Integration
+
+28. **Frontend-Backend API Connection**: In `/frontend/src/services/api.js`, create an Axios instance to manage API calls to backend endpoints (submission, scraping, analysis, subscription). Reference: App Flow: Integration.
+29. **Link Authentication**: Ensure Clerk authentication in the front end is connected with backend protected endpoints by passing user tokens. Reference: Key Features: User Authentication.
+30. **UI Integration for URL Submission**: Hook up the URL submission form in the Dashboard component to call `POST /api/submissions` and subsequently `POST /api/scrape`. Reference: Key Features: Data Scraping.
+31. **Error Notification Integration**: On the frontend, use Chakra UI toast notifications or similar to display error messages returned from the backend. Reference: Key Features: Error Handling.
+32. **Validation**: Through the web UI, perform an end-to-end test by submitting a product URL and verifying that the status updates correctly and errors are handled gracefully.
+
+## Phase 6: Cursor IDE Advanced Configuration
+
+33. **Review Cursor Metrics File**: Verify that `cursor_metrics.md` exists in the project root with any required metrics placeholders for tracking project performance as per your project rules. Reference: Cursor Project Rules.
+34. **Revisit MCP Configuration**: Confirm that the `.cursor/mcp.json` file (created in Phase 1) is correctly configured with your Supabase connection string. Reference: Tech Stack: IDE (Cursor) Setup.
+35. **Validation**: In Cursor, navigate to Settings/MCP and confirm that the status is active, indicating successful MCP connection.
+
+## Phase 7: Deployment
+
+36. **Deploy Frontend to Vercel**: Connect the `/frontend` repository to Vercel and deploy the production branch. Reference: Deployment: Frontend.
+37. **Deploy Backend to Railway**: Create a new Railway project and link it to the `/backend` repository. Set required environment variables (Supabase connection, Stripe keys, DeepSeek API keys). Reference: Deployment: Backend.
+38. **Database Verification**: Ensure that your Supabase (PostgreSQL) instance is correctly set up and that all tables (users, submissions, reviews, analyses) are present with the proper schema. Reference: Database Schema (Supabase).
+39. **Custom Domain Setup**: Configure your custom domain (e.g., rivalrecon.com) for both frontend and backend deployments. Update DNS records accordingly and verify that SSL is active. Reference: Deployment: Custom Domain & SSL.
+40. **Validation**: Access the deployed URLs and confirm that the frontend renders correctly, the backend endpoints are accessible, and the custom domain shows a valid SSL certificate.
+
+## Phase 8: Final Testing & Documentation
+
+41. **End-to-End Testing**: Run comprehensive tests (manual and automated) that simulate a user signing up via Clerk, submitting a product URL, triggering scraping and AI analysis, and viewing the interactive dashboard. Reference: Next Steps.
+42. **Subscription & Usage Limits Testing**: Simulate different subscription plans to ensure that usage limits (Free: 5, $19.99: 75, $49.99: 250 analyses/month) are enforced properly. Reference: Key Features: Subscription Management & Usage Limits.
+43. **Error Handling Checks**: Force errors in scraping and AI analysis to verify that appropriate error messages are displayed on both frontend and backend. Reference: Key Features: Error Handling.
+44. **Documentation Update**: Update the project README with setup instructions, environment variable configurations, and deployment guidelines.
+45. **Code Review and Commit**: Perform a final review of the codebase, commit changes to your version control system, and tag the release if applicable.
+
+This concludes the detailed step-by-step implementation plan for the RivalRecon project. Follow each phase carefully, ensuring that validations are performed after each critical step to maintain alignment with the project requirements.

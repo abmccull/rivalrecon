@@ -1,0 +1,35 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+flowchart TD
+    LP[Landing Page]
+    GS[Get Started]
+    UL[User Login - Clerk]
+    MD[Main Dashboard]
+    SC[Subscription Check - Stripe]
+    URL[URL Submission]
+    DS[Data Scraping - Scrapy, Puppeteer, RapidAPI]
+    AI[AI Analysis - DeepSeek API]
+    DB[Update Database - submissions, reviews, analyses]
+    ID[Interactive Dashboard]
+    CI[Competitive Insights - Radar, Scatter, Heatmap, Gauge, Bar charts]
+    RP[Export Report - PDF/CSV]
+    EH[Toast Error Handling]
+
+    LP --> GS
+    GS --> UL
+    UL --> MD
+    MD --> SC
+    SC --> URL
+    URL --> DS
+    DS --> AI
+    AI --> DB
+    DB --> ID
+    ID --> CI
+    ID --> RP
+    DS --> EH
+    AI --> EH

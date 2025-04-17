@@ -1,0 +1,153 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+## Project Overview
+
+* **Type:** Competitive Intelligence Tool
+* **Description:** RivalRecon analyzes product reviews for CPG companies, providing actionable insights into both their own products and competitors.
+* **Primary Goal:** Enable competitive intelligence through automated scraping, AI-driven analysis, and dynamic dashboard visualization of product reviews.
+
+## Project Structure
+
+### Framework-Specific Routing
+
+* **Directory Rules:**
+
+    * **React Router 6:** Use `src/routes/` with `createBrowserRouter` for route configuration.
+    * Example: `src/routes/home.jsx` for the home page route.
+
+### Core Directories
+
+* **Versioned Structure:**
+
+    * **src/**: Contains the main application code intended for React Router 6 setups.
+    * Example 1: `src/routes` → "Houses route definitions for the application using React Router 6."
+    * Example 2: `src/components` → "Reusable UI components built with React.js and Chakra UI."
+
+### Key Files
+
+* **Stack-Versioned Patterns:**
+
+    * **src/App.js:** Entry point for the React application, integrating React Router 6 and global configurations.
+    * Example 1: `src/routes/dashboard.jsx` → "Dashboard route handling submission, scraping result display, and analysis integration."
+
+## Tech Stack Rules
+
+* **Version Enforcement:**
+
+    * **react-router@6:** Enforce use of `src/routes/` with browser-based routing using `createBrowserRouter` and related hooks.
+    * Example: Avoid mixing routing patterns such as Next.js `pages/` structures.
+
+## PRD Compliance
+
+* **Non-Negotiable:**
+
+    * "To analyze product reviews for CPG companies, providing actionable insights into their own products and competitors." – This mandates robust scraping, AI analysis via DeepSeek API, and comprehensive competitive insights visualized with radar charts, scatter plots, and other chart types.
+
+## App Flow Integration
+
+* **Stack-Aligned Flow:**
+
+    * Example: "React Router 6 Auth Flow → `src/routes/auth/login.jsx` handles Clerk-based user authentication and session management."
+
+## Best Practices
+
+* **React.js**
+    * Write clean, modular components.
+    * Use hooks (e.g., useState, useEffect) for state management.
+    * Maintain separation of concerns between UI and business logic.
+
+* **Chakra UI**
+    * Utilize theme customization to maintain consistent branding.
+    * Favor responsive design patterns for mobile compatibility.
+    * Leverage built-in accessibility features.
+
+* **Framer Motion**
+    * Use smooth transitions for enhanced UI/UX.
+    * Optimize animations to avoid performance bottlenecks.
+    * Keep animations subtle to support user focus.
+
+* **Plotly.js**
+    * Ensure charts are interactive and responsive.
+    * Optimize data fetching for real-time updates.
+    * Provide fallback content for charts when data is loading.
+
+* **react-wordcloud**
+    * Configure word clouds to reflect frequency accurately.
+    * Adjust font sizes dynamically based on term frequency.
+    * Ensure color contrasts meet accessibility standards.
+
+* **React Router**
+    * Use nested routes where applicable for better organization.
+    * Ensure lazy loading of components to reduce initial load times.
+    * Keep route configuration centralized for easy maintenance.
+
+* **Node.js & Express**
+    * Use middleware for error handling and request logging.
+    * Structure API endpoints following RESTful principles.
+    * Secure endpoints with proper authentication and rate limiting.
+
+* **Celery & Redis**
+    * Use Celery for background tasks and queue management.
+    * Employ Redis for caching and session management.
+    * Monitor worker performance and task queue length.
+
+* **Supabase (PostgreSQL)**
+    * Structure database schemas with clear relationships between tables.
+    * Use Supabase authentication where possible.
+    * Ensure regular migrations and backups.
+
+* **Clerk**
+    * Secure authentication flows with session management.
+    * Integrate Clerk seamlessly with front-end and backend validations.
+    * Monitor login activity for unusual patterns.
+
+* **Scrapy & Puppeteer**
+    * Maintain separate scraping modules for Shopify, Yotpo, TrustPilot, Loox, and Judge.me.
+    * Ensure Puppeteer headless browser instances are properly managed.
+    * Handle retries and timeouts gracefully in scraping scripts.
+
+* **Rapid API (Amazon)**
+    * Handle API rate limits and errors gracefully in the codebase.
+    * Validate incoming data from API responses.
+    * Secure API keys and configuration settings.
+
+* **DeepSeek API**
+    * Ensure AI analysis adheres to default settings in MVP.
+    * Validate analysis outputs before integrating into dashboards.
+    * Optimize data payloads to reduce latency.
+
+* **Stripe**
+    * Use secure methods to handle payment transactions.
+    * Enforce subscription-based usage limits in line with pricing tiers.
+    * Keep customer data secure and compliant with relevant standards.
+
+## Rules
+
+* Derive folder/file patterns **directly** from tech stack versions as documented.
+* If React Router 6 is used, enforce the `src/routes/` directory with nested route folders.
+* Avoid mixing version patterns (e.g., do not use Next.js `pages/` in React Router projects).
+* Maintain clear separation between frontend (React.js) and backend (Node.js/Express) layering.
+
+## Rules Metrics
+
+Before starting project development, create a metrics file in the root of the project called `cursor_metrics.md`.
+
+### Instructions:
+
+* Each time a cursor rule is used as context, update `cursor_metrics.md`.
+* Use the following format for `cursor_metrics.md:`
+
+# Rules Metrics
+
+## Usage
+
+The number of times each rule is used as context:
+
+* rule-name.mdc: 5
+* another-rule.mdc: 2
+* ...other rules

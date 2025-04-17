@@ -1,0 +1,203 @@
+---
+description: Apply these rules when making changes to the project
+globs:
+alwaysApply: true
+---
+
+Update this rule if user requested changes to the project requirement, etc.
+# Backend Structure Document
+
+This document outlines the backend architecture for the RivalRecon project, a competitive intelligence tool designed for CPG companies. It details the design, database management, APIs, hosting, infrastructure, security, monitoring, and overall approach. The explanation uses everyday language to ensure clarity even if you’re not technically inclined.
+
+## Backend Architecture
+
+RivalRecon’s backend is built to be scalable, maintainable, and reliable. Here are its key architectural aspects:
+
+*   **Technology Frameworks:**
+
+    *   *Node.js* with *Express* handles the main server operations and REST endpoints.
+    *   *Celery* (a Python-based tool) is used for managing asynchronous tasks, such as data scraping and AI-driven analysis, with *Redis* acting as the task queue and caching layer.
+
+*   **Design Patterns:**
+
+    *   The backend uses a modular pattern where different concerns (like authentication, scraping, analysis, etc.) are isolated in separate modules.
+    *   RESTful principles guide API design, ensuring that each endpoint clearly defines its purpose.
+
+*   **Scalability & Performance:**
+
+    *   By offloading heavy processes (like scraping and analysis) to background workers, the server remains responsive.
+    *   The use of Redis for caching helps speed up repetitive tasks and reduces load on the database.
+
+*   **Integration with External Services:**
+
+    *   **User Authentication:** Clerk manages secure sign-up and login processes.
+    *   **Scraping Engines:** Scrapy, Puppeteer, and Rapid API handle data extraction from various review platforms.
+    *   **AI Analysis:** DeepSeek API is integrated to process review data and derive insights.
+
+## Database Management
+
+RivalRecon uses Supabase, powered by PostgreSQL, to manage all its data needs. Here’s how data is handled:
+
+*   **Database Type:**
+
+    *   SQL (PostgreSQL through Supabase)
+
+*   **Data Management Practices:**
+
+    *   Data is structured into logical tables for users, submissions, reviews, and analyses.
+    *   Relationships between tables (for example, linking submissions to the user and analyses to submissions) ensure data consistency.
+    *   Standard SQL queries are used for data retrieval and manipulation, facilitating straightforward maintenance and scalability.
+
+## Database Schema
+
+Below is a human-readable depiction of the database schema. This is followed by sample SQL statements that define the schema.
+
+### Human Readable Description:
+
+*   **users:** Managed by Clerk. Each record includes a `user_id` and user information.
+
+*   **submissions:** Records each product URL submitted by users. Fields include:
+
+    *   URL of the product
+    *   User identifier (linking to the `users` table)
+    *   Status of the scraping process (e.g., completed, in-progress, or failed)
+    *   Timestamp of submission
+
+*   **reviews:** Contains scraped review data with fields such as:
+
+    *   Product name, brand, and category
+    *   Overall rating
+    *   Review text and review date
+    *   Link to the relevant submission
+
+*   **analyses:** Contains the processed data and insights from reviews. Fields include:
+
+    *   Reference to the original submission
+    *   Time-series of ratings
+    *   Trending insights, top positives, and negatives
+    *   Word map for common terms
+    *   Competitive insights and identified opportunities
+
+### Sample SQL Schema (PostgreSQL):
+
+-- USERS table (managed by Clerk, so not created manually, but referenced)
+
+-- SUBMISSIONS table CREATE TABLE submissions ( id SERIAL PRIMARY KEY, url TEXT NOT NULL, user_id TEXT NOT NULL, -- links to Clerk managed user status VARCHAR(50) NOT NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP );
+
+-- REVIEWS table CREATE TABLE reviews ( id SERIAL PRIMARY KEY, product_name TEXT NOT NULL, brand_name TEXT, category TEXT, overall_rating NUMERIC, review_text TEXT, review_date DATE, submission_id INTEGER REFERENCES submissions(id) ON DELETE CASCADE );
+
+-- ANALYSES table CREATE TABLE analyses ( id SERIAL PRIMARY KEY, submission_id INTEGER REFERENCES submissions(id) ON DELETE CASCADE, ratings_over_time JSONB, trending JSONB, top_positives JSONB, top_negatives JSONB, word_map JSONB, competitive_insights JSONB, opportunities JSONB, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP );
+
+## API Design and Endpoints
+
+The backend uses a RESTful design. Each endpoint is created with a clear purpose, helping the front end interact effortlessly with backend services. Here’s an overview:
+
+*   **Authentication & User Management:**
+
+    *   Endpoints handle user sign-up, login, and profile management via Clerk integration.
+
+*   **Data Scraping:**
+
+    *   Endpoints accept product URLs and initiate scraping jobs using available scrapers (Scrapy, Puppeteer, and Rapid API for Amazon).
+    *   Example Endpoint: POST `/api/scrape` – Accepts the URL, triggers the scraping job, and returns a status message.
+
+*   **Analysis and AI Processing:**
+
+    *   Endpoints trigger background analysis jobs using DeepSeek API.
+    *   Example Endpoint: POST `/api/analyze` – Initiates review processing and analysis once scraping is complete.
+
+*   **Dashboard Data & Reporting:**
+
+    *   Endpoints provide data for dashboards and exports in CSV or PDF formats.
+    *   Example Endpoint: GET `/api/dashboard/:submission_id` – Retrieves processed insights for visualization.
+    *   Example Endpoint: GET `/api/report/:submission_id` – Exports analysis reports.
+
+## Hosting Solutions
+
+RivalRecon’s backend, frontend, and database are hosted on specialized platforms to ensure reliability and scalability:
+
+*   **Backend Hosting:**
+
+    *   Railway is used for hosting the Node.js server and Celery worker processes.
+
+*   **Frontend Hosting:**
+
+    *   Vercel handles the deployment of the React-based interface, ensuring a fast and modern user experience.
+
+*   **Database Hosting:**
+
+    *   Supabase, which uses PostgreSQL, is used for all backend data storage needs.
+
+*   **Benefits:**
+
+    *   These hosting solutions offer automatic scaling, reliable uptime, and competitive cost-effectiveness. They also simplify the process of deploying updates and managing SSL certificates for custom domains.
+
+## Infrastructure Components
+
+Several infrastructure components work together to deliver high performance and a smooth user experience:
+
+*   **Load Balancers:**
+
+    *   Managed by Railway and/or underlying cloud provider to distribute incoming requests evenly across server instances.
+
+*   **Caching:**
+
+    *   Redis is used not only as a task queue for Celery but also for caching frequent queries and reducing database load.
+
+*   **Content Delivery Network (CDN):**
+
+    *   Vercel provides CDN capabilities to ensure that static assets and frontend requests are delivered quickly to users globally.
+
+*   **Task Queue & Async Processing:**
+
+    *   Celery handles background tasks (like scraping and AI analysis) ensuring that heavy operations do not block user interactions.
+
+## Security Measures
+
+Security is a top priority in the RivalRecon backend. Some of the measures put in place include:
+
+*   **Authentication & Authorization:**
+
+    *   Clerk is used to manage secure user sign-up and login, ensuring only authenticated users can access their data.
+
+*   **Data Encryption:**
+
+    *   All sensitive data transmitted between the client and server is encrypted using SSL.
+    *   The custom domain comes with SSL certificates, ensuring data remains private and secure.
+
+*   **Rate Limiting:**
+
+    *   APIs enforce rate limits based on subscription tiers to prevent abuse of scraping and analysis functionalities.
+
+*   **Payment and Subscription Security:**
+
+    *   Stripe handles payment processing, ensuring transaction security and compliance with financial regulations.
+
+## Monitoring and Maintenance
+
+To keep the backend running smoothly, several monitoring and maintenance strategies are implemented:
+
+*   **Performance Monitoring:**
+
+    *   Railway provides logging, error tracking, and performance metrics for the backend services.
+    *   Additional monitoring tools can be incorporated to track server health and API response times.
+
+*   **Regular Updates:**
+
+    *   The codebase and dependencies are regularly updated to address security vulnerabilities and improve performance.
+
+*   **Maintenance Strategies:**
+
+    *   Scheduled maintenance windows and automated backups help ensure data integrity and system reliability.
+
+## Conclusion and Overall Backend Summary
+
+The RivalRecon backend is built on a modern and scalable architecture that effectively supports its main features:
+
+*   It leverages a modular design using Node.js, Express, and Celery with Redis to handle both synchronous and asynchronous tasks.
+*   The relational database managed by Supabase (PostgreSQL) is structured in a way that supports complex data relationships with ease.
+*   RESTful APIs provide a clear and direct communication channel between the frontend and backend, supporting secure data scraping, analysis, and dashboard rendering.
+*   Hosting services like Railway, Vercel, and Supabase ensure a reliable, scalable, and cost-effective environment.
+*   Thoughtful integration of security measures such as Clerk authentication, SSL encryption, rate limiting, and Stripe for payments guarantee data protection and regulatory compliance.
+
+Overall, this backend setup is designed to meet the project’s needs efficiently while offering room for future upgrades and enhancements, setting RivalRecon apart as a robust, intelligent tool for competitive analysis in the CPG marketplace.

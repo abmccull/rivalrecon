@@ -1,0 +1,168 @@
+---
+description: Apply these rules when making changes to the project
+globs: 
+alwaysApply: true
+---
+### RivalRecon Supabase Authentication Rules
+
+Purpose
+
+This document provides strict guidelines for implementing authentication functionalities in RivalRecon using Supabase's built-in authentication exclusively. It focuses on ensuring secure user management, session handling, and enforcing Row Level Security (RLS) in all database transactions.
+
+### 1. Authentication Architecture
+
+Supabase Authentication
+
+*   **Method**: Use Supabase’s native authentication system for sign-up, sign-in, and session management processes.
+
+*   **User Data Storage**: Utilize the `auth.users` table in Supabase, using UUID as the primary identifier for user records.
+
+*   **Authentication Mechanisms**:
+
+    *   Support email/password authentication system.
+    *   Optionally enable OAuth providers such as Google if specified in future requirements.
+
+### 2. Database Architecture
+
+Supabase Database Schema
+
+*   **Tables**:
+
+    *   **Submissions**: Contains fields like `id`, `url`, `user_id`, `status`, and `created_at`.
+    *   **Reviews**: Includes fields such as `id`, `submission_id`, `product_name`, `brand_name`, `category`, `overall_rating`, `review_text`, `review_date`, and `created_at`.
+    *   **Analyses**: Comprises fields like `id`, `submission_id`, `ratings_over_time`, `trending`, `top_positives`, `top_negatives`, `word_map`, `competitive_insights`, `opportunities`, and `created_at`.
+
+Row Level Security (RLS)
+
+*   **Implementation**: Enable RLS on all database tables to control access based on the authenticated user's ID.
+*   **Access Control**: Restrict access to rows by matching `user_id` with `auth.uid()` from the session context.
+
+### 3. Application Components
+
+Frontend
+
+*   **Library**: Use `@supabase/supabase-js` for authentication processes and database interactions.
+
+*   **Functionality**:
+
+    *   Implement user flows for sign-up, sign-in, sign-out, and session persistence.
+    *   Handle authenticated requests responsibly to ensure RLS enforcement.
+
+Backend
+
+*   **Library**: Utilize `@supabase/supabase-js` in a Node.js/Express backend.
+*   **Role**: Manage API endpoints to authenticate requests through Supabase sessions that comply with RLS.
+
+### 4. Setup Guidelines
+
+Supabase Authentication Configuration
+
+*   **Settings**:
+
+    *   Enable email authentication in the Supabase Dashboard under Authentication Settings.
+    *   Consider disabling email confirmations in development environments for easier testing.
+
+*   **Third-Party Providers**: Avoid the inclusion of third-party authentication providers unless requested.
+
+Database Schema and RLS Definition
+
+*   **Schema Requirements**:
+
+    *   Ensure `user_id` is UUID NOT NULL DEFAULT `auth.uid()` in all relevant tables.
+    *   Use UUIDs for primary keys, generated via `uuid_generate_v4()`.
+
+*   **RLS Policies**:
+
+    *   **For submissions**:
+
+        *   **SELECT Policy**: Allow access only where `user_id` equals `auth.uid()`.
+        *   **INSERT Policy**: Allow insertion only if `user_id` equals `auth.uid()`.
+
+    *   **Enabling RLS**:
+
+        *   Confirm RLS is enabled by executing: `ALTER TABLE <table> ENABLE ROW LEVEL SECURITY`.
+
+Environment Variables
+
+*   **Configuration**:
+
+    *   Define `SUPABASE_URL` and `SUPABASE_KEY` using secure environment variable practices.
+    *   Use proper prefixes like `REACT_APP_` for React front-end configurations.
+
+Supabase Client Integration
+
+*   **Initialization**: Set up the client with `@supabase/supabase-js` using `SUPABASE_URL` and `SUPABASE_KEY`.
+*   **Session Management**: Leverage automatic session maintenance to authenticate requests effectively.
+
+### 5. Strict Rules for Implementation
+
+Supabase Exclusive Use
+
+*   **Integration**: Do not integrate third-party authentication providers, such as Clerk.
+*   **Functionality**: Implement sign-up, sign-in, and sign-out using Supabase’s auth functions.
+
+Enforcing RLS
+
+*   **Policy**: Always enable RLS on new tables.
+*   **Schema Control**: Ensure user_id association via `auth.uid()`.
+*   **Data Access**: Avoid manual user ID filtering; rely on RLS.
+
+Handling Authentication
+
+*   **Session Management**:
+
+    *   Check session status on application load.
+    *   Listen for authentication state changes.
+    *   Provide a user interface for all authentication-related actions.
+
+Secure Database Operations
+
+*   **Queries**: Conduct all database queries with an authenticated Supabase client.
+*   **Integrity**: Ensure `user_id` is populated via table defaults, not passed manually.
+
+### 6. Troubleshooting Guidelines
+
+Authentication Errors
+
+*   **401 Unauthorized**:
+
+    *   Verify user sign-in status.
+    *   Inspect the correctness of `SUPABASE_URL` and `SUPABASE_KEY`.
+
+RLS Errors
+
+*   **Investigation**:
+
+    *   Confirm RLS policies use `auth.uid()`.
+    *   Verify `user_id` values align with `auth.users.id`.
+
+Session Challenges
+
+*   **Management**:
+
+    *   Ensure persistent session handling.
+    *   Test that signing out clears all session data properly.
+
+### 7. Validation Checklist
+
+Authentication Features
+
+*   **Functionality**: Users must be able to sign up, sign in, and sign out seamlessly.
+*   **Session Robustness**: Validate that sessions persist across user interactions and refreshes.
+
+Database Security
+
+*   **RLS**: Confirm that data access is appropriately restricted to authenticated users.
+*   **Defaults**: Ensure `user_id` defaults to `auth.uid()`.
+
+Error Handling
+
+*   **Assessment**: Authentication and query errors should be properly caught and displayed to users.
+
+Testing Consistency
+
+*   **Isolation**: Conduct multi-user tests to confirm data segregation and access restrictions.
+
+### Conclusion
+
+These comprehensive guidelines ensure that RivalRecon maintains a robust, secure, and exclusive Supabase-based authentication system. By adhering strictly to Supabase's native authentication and RLS capabilities, the integration enhances security, reduces complexity, and ensures compliance with project specifications.

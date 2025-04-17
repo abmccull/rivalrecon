@@ -1,0 +1,177 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# RivalRecon Project Structure
+
+## Directory Structure
+
+```
+rivalrecon/
+├── frontend/                 # React frontend application
+│   ├── src/
+│   │   ├── components/      # Reusable UI components
+│   │   │   ├── auth/       # Authentication related components
+│   │   │   ├── common/     # Shared components (buttons, inputs, etc.)
+│   │   │   ├── dashboard/  # Dashboard specific components
+│   │   │   └── layout/     # Layout components (header, footer, etc.)
+│   │   ├── hooks/          # Custom React hooks
+│   │   ├── contexts/       # React context providers
+│   │   ├── services/       # API and external service integrations
+│   │   ├── utils/          # Utility functions and helpers
+│   │   ├── types/          # TypeScript type definitions
+│   │   ├── styles/         # Global styles and theme configuration
+│   │   ├── pages/          # Page components
+│   │   ├── routes/         # Route configurations
+│   │   └── App.tsx         # Root application component
+│   ├── public/             # Static assets
+│   ├── package.json        # Frontend dependencies
+│   └── .env.local          # Frontend environment variables
+├── backend/                 # Node.js backend application
+│   ├── src/
+│   │   ├── controllers/    # Request handlers
+│   │   ├── middleware/     # Express middleware
+│   │   ├── models/         # Data models
+│   │   ├── routes/         # API route definitions
+│   │   ├── services/       # Business logic and external service integration
+│   │   ├── utils/          # Utility functions
+│   │   ├── types/          # TypeScript type definitions
+│   │   └── app.ts          # Express application setup
+│   ├── package.json        # Backend dependencies
+│   └── .env                # Backend environment variables
+├── package.json            # Root package.json for workspace management
+└── docs/                   # Project documentation
+    └── project_structure.md # This file
+
+```
+
+## File Naming Conventions
+
+1. **Components**
+   - Use PascalCase for component files: `Button.tsx`, `UserProfile.tsx`
+   - Include `.tsx` extension for TypeScript React files
+   - Place test files adjacent to components with `.test.tsx` suffix
+
+2. **Utilities and Hooks**
+   - Use camelCase for utility files: `formatDate.ts`, `useAuth.ts`
+   - Prefix custom hooks with "use": `useLocalStorage.ts`
+
+3. **Constants and Types**
+   - Use PascalCase for type definitions: `UserTypes.ts`
+   - Use SCREAMING_SNAKE_CASE for constant values: `API_ENDPOINTS.ts`
+
+## Best Practices
+
+### Adding New Components
+
+1. **Component Organization**
+   - Place new components in the appropriate subdirectory under `frontend/src/components/`
+   - Create new subdirectories only when components form a logical group
+   - Include component-specific types in the same directory
+
+2. **Shared Components**
+   - Place reusable components in `frontend/src/components/common/`
+   - Document props using TypeScript interfaces
+   - Include usage examples in comments
+
+### Backend Structure
+
+1. **API Endpoints**
+   - Group related endpoints in the same router file
+   - Place route handlers in `backend/src/controllers/`
+   - Keep business logic in `backend/src/services/`
+
+2. **Middleware**
+   - Place shared middleware in `backend/src/middleware/`
+   - Use middleware for cross-cutting concerns (auth, logging, etc.)
+
+### Environment Variables
+
+1. **Frontend (.env.local)**
+   - Prefix all variables with `REACT_APP_`
+   - Group variables by service (Supabase, API keys, etc.)
+   - Document required variables in `.env.example`
+
+2. **Backend (.env)**
+   - Group variables by service
+   - Include clear descriptions in comments
+   - Document required variables in `.env.example`
+
+### Avoiding Duplication
+
+1. **Code Duplication**
+   - Extract shared logic into utility functions
+   - Use composition over inheritance
+   - Create shared types in `types` directory
+
+2. **Component Duplication**
+   - Check existing components before creating new ones
+   - Use component composition to extend functionality
+   - Document component variants in comments
+
+3. **File Structure**
+   - Avoid nested directories deeper than 3 levels
+   - Don't create separate directories for single files
+   - Keep related files close together
+
+### Testing
+
+1. **Test Files**
+   - Place test files next to the implementation
+   - Use descriptive test names
+   - Group tests logically using describe blocks
+
+### Documentation
+
+1. **Code Comments**
+   - Document complex logic and business rules
+   - Include JSDoc comments for public functions
+   - Explain any non-obvious implementations
+
+2. **README Files**
+   - Include README.md in major directories
+   - Document setup and configuration steps
+   - Keep documentation up to date
+
+## Adding New Features
+
+1. **Planning**
+   - Review existing components for reuse
+   - Plan component hierarchy
+   - Consider impact on existing features
+
+2. **Implementation**
+   - Follow established patterns
+   - Keep components focused and single-responsibility
+   - Update documentation as needed
+
+3. **Review**
+   - Ensure proper test coverage
+   - Check for duplicate code
+   - Verify proper file organization
+
+## Maintenance
+
+1. **Regular Tasks**
+   - Review and remove unused code
+   - Update dependencies
+   - Refactor when patterns emerge
+   - Keep documentation current
+
+2. **Code Quality**
+   - Follow ESLint and Prettier configurations
+   - Maintain consistent code style
+   - Address technical debt promptly
+
+## Version Control
+
+1. **Branch Organization**
+   - Use feature branches for new development
+   - Keep branches focused and small
+   - Delete merged branches
+
+2. **Commit Messages**
+   - Use clear, descriptive commit messages
+   - Reference issue numbers when applicable
+   - Keep commits focused and atomic 
