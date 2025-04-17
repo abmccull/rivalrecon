@@ -90,24 +90,7 @@ router.get('/', async (req, res) => {
 
     const { data: submissions, error } = await supabase
       .from('submissions')
-      .select(`
-        *,
-        reviews (
-          id,
-          review_rating,
-          review_date
-        ),
-        analyses (
-          id,
-          ratings_over_time,
-          trending,
-          top_positives,
-          top_negatives,
-          word_map,
-          competitive_insights,
-          opportunities
-        )
-      `)
+      .select('*, reviews(id, review_rating, review_date), analyses(id, ratings_over_time, trending, top_positives, top_negatives, word_map, competitive_insights, opportunities)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
