@@ -2,8 +2,12 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createClient, User, Session, AuthResponse, AuthError } from '@supabase/supabase-js';
 
 // Get environment variables
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://yqpyrnnxswvlnuuijmsn.supabase.co';
-const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxcHlybm54c3d2bG51dWlqbXNuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQzOTkzMjIsImV4cCI6MjA1OTk3NTMyMn0.Pb88ctXfQfq3vkTZPQh346ffkL8V7a3CDic3sJUs2Hc';
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing required environment variables for Supabase configuration');
+}
 
 // Create a singleton supabase client
 let supabaseInstance = null;

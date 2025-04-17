@@ -86,18 +86,16 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log('Fetching submissions for user:', userId);
 
     const { data: submissions, error } = await supabase
       .from('submissions')
-      // Fetch all submission columns, including the new product details
-      // Only select necessary fields from related reviews
       .select(`
         *,
         reviews (
           id,
-          review_rating, // Keep individual review rating if needed
+          review_rating,
           review_date
-          // Removed: product_name, brand_name, category, overall_rating
         ),
         analyses (
           id,
@@ -114,14 +112,16 @@ router.get('/', async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) {
+      console.error('Supabase error details:', JSON.stringify(error, null, 2));
       throw error;
     }
 
-    // Return just the submissions array instead of an object with submissions property
+    console.log(`Successfully fetched ${submissions?.length || 0} submissions`);
     res.json(submissions);
 
   } catch (error) {
     console.error('Error fetching submissions:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to fetch submissions' });
   }
 });
@@ -134,23 +134,20 @@ router.get('/:id', async (req, res) => {
 
     const { data: submission, error } = await supabase
       .from('submissions')
-       // Fetch all submission columns, including the new product details
-      // Select necessary fields from related reviews
       .select(`
         *,
         reviews (
           id,
-          review_rating, // Keep individual review rating
+          review_rating,
           review_text,
           review_date,
-          review_title, // Keep review title
-          review_images, // Keep review images
+          review_title,
+          review_images,
           verified_purchase,
           api_review_id,
           review_author,
           helpful_votes_text,
           is_vine_review
-          // Removed: product_name, brand_name, category, overall_rating
         ),
         analyses (
           id,
