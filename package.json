@@ -19,5 +19,9 @@
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "@chakra-ui/icons": "^2.2.4",
+    "recharts": "^2.15.3"
   }
-} 
+}

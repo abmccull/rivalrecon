@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const Redis = require('ioredis');
-const celery = require('celery-node'); // Keep for potential future use? Maybe remove if only using raw redis.
+// const celery = require('celery-node'); // Keep for potential future use? Maybe remove if only using raw redis.
 const util = require('util'); // Import util for promisify if needed elsewhere, though not directly for rpush here
 
 class TaskManager {
@@ -101,13 +101,11 @@ class TaskManager {
    */
   async queueScrapeTask(submissionId, url) {
     console.log(`Creating scrape task for URL: ${url} and submission ID: ${submissionId}`);
-    const { messageString, taskId } = this.createTaskMessage('worker.scrape_reviews', [submissionId, url], {});
+    const { messageString, taskId } = this.createTaskMessage('scrape_product_reviews', [submissionId, url], {});
     const queueName = this.defaultQueue;
 
     try {
       console.log(`Safe RPUSH to queue: ${queueName}, message length: ${messageString.length}`);
-      // console.log(`Message details: task=worker.scrape_reviews, id=${taskId}, args=["${submissionId}", "${url.substring(0, 50)}..."]`); // Log args if needed
-      // Use rpush with queue and message as separate arguments - VERIFIED THIS LOOKS RIGHT
       const result = await this.redis.rpush(queueName, messageString);
       console.log(`Task ${taskId} queued successfully, RPUSH result: ${result}`);
       return taskId;
@@ -125,13 +123,11 @@ class TaskManager {
    */
   async queueAnalysisTask(submissionId) {
     console.log(`Creating analysis task for submission ID: ${submissionId}`);
-    const { messageString, taskId } = this.createTaskMessage('worker.analyze_reviews', [submissionId], {});
+    const { messageString, taskId } = this.createTaskMessage('analyze_reviews', [submissionId], {});
     const queueName = this.defaultQueue;
 
     try {
       console.log(`Safe RPUSH to queue: ${queueName}, message length: ${messageString.length}`);
-      // console.log(`Message details: task=worker.analyze_reviews, id=${taskId}, args=[${submissionId}]`); // Log args if needed
-      // Use rpush with queue and message as separate arguments - VERIFIED THIS LOOKS RIGHT
       const result = await this.redis.rpush(queueName, messageString);
       console.log(`Task ${taskId} queued successfully, RPUSH result: ${result}`);
       return taskId;

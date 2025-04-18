@@ -1,3 +1,8 @@
+---
+description: 
+globs: worker.py,tasks.py
+alwaysApply: false
+---
 # Celery Message Format and Redis Integration
 
 This document explains the Celery message format used in the RivalRecon application and how it interacts with Redis. It provides guidance for maintaining and troubleshooting the communication between the Node.js backend and Python Celery workers.
@@ -103,8 +108,8 @@ node test-task.js
 
 ## Further Reading
 
-- [Celery Protocol Documentation](https://docs.celeryq.dev/en/stable/internals/protocol.html)
-- [Redis Command Reference for RPUSH](https://redis.io/commands/rpush/)
-- [ioredis Documentation](https://github.com/luin/ioredis)
+- [Celery Protocol Documentation](mdc:https:/docs.celeryq.dev/en/stable/internals/protocol.html)
+- [Redis Command Reference for RPUSH](mdc:https:/redis.io/commands/rpush)
+- [ioredis Documentation](mdc:https:/github.com/luin/ioredis)
 
 This document was last updated based on fixes implemented on April 15, 2025. 
