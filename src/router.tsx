@@ -3,6 +3,7 @@ import LandingPage from './pages/landing-page';
 import Dashboard from './features/dashboard/Dashboard';
 import SignInPage from './pages/auth/SignInPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import AnalysisDashboard from './routes/analysis/[submissionId]';
 
 // Extend the FutureConfig type to include all v7 future flags
 type ExtendedFutureConfig = {
@@ -32,6 +33,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute>
         <Dashboard />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: '/analysis/:submissionId',
+    element: (
+      <ProtectedRoute>
+        <AnalysisDashboard />
       </ProtectedRoute>
     ),
   },
