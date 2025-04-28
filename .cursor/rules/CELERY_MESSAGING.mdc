@@ -1,6 +1,6 @@
 ---
 description: 
-globs: worker.py,tasks.py
+globs: 
 alwaysApply: false
 ---
 # Celery Message Format and Redis Integration

@@ -3,17 +3,17 @@ description: Apply these rules when making changes to the project
 globs: 
 alwaysApply: true
 ---
-### RivalRecon Supabase Authentication Rules
+### RivalRecon Supabase Authentication Rules (Next.js Integration)
 
 Purpose
 
-This document provides strict guidelines for implementing authentication functionalities in RivalRecon using Supabase's built-in authentication exclusively. It focuses on ensuring secure user management, session handling, and enforcing Row Level Security (RLS) in all database transactions.
+This document provides strict guidelines for implementing authentication functionalities in RivalRecon using Supabase's built-in authentication exclusively, integrated within a **Next.js (App Router)** frontend. It focuses on ensuring secure user management, session handling, and enforcing Row Level Security (RLS) in all database transactions.
 
 ### 1. Authentication Architecture
 
 Supabase Authentication
 
-*   **Method**: Use Supabase’s native authentication system for sign-up, sign-in, and session management processes.
+*   **Method**: Use Supabase's native authentication system for sign-up, sign-in, and session management processes, primarily handled via the Next.js frontend.
 
 *   **User Data Storage**: Utilize the `auth.users` table in Supabase, using UUID as the primary identifier for user records.
 
@@ -35,23 +35,25 @@ Supabase Database Schema
 Row Level Security (RLS)
 
 *   **Implementation**: Enable RLS on all database tables to control access based on the authenticated user's ID.
-*   **Access Control**: Restrict access to rows by matching `user_id` with `auth.uid()` from the session context.
+*   **Access Control**: Restrict access to rows by matching `user_id` with `auth.uid()` from the session context (available in backend API calls and Supabase client sessions).
 
 ### 3. Application Components
 
-Frontend
+Frontend (Next.js)
 
-*   **Library**: Use `@supabase/supabase-js` for authentication processes and database interactions.
+*   **Library**: Use `@supabase/supabase-js`, potentially with helper libraries like `@supabase/auth-helpers-nextjs` or custom client/server instances.
 
 *   **Functionality**:
 
-    *   Implement user flows for sign-up, sign-in, sign-out, and session persistence.
-    *   Handle authenticated requests responsibly to ensure RLS enforcement.
+    *   Implement user flows for sign-up, sign-in, sign-out using Client Components.
+    *   Manage client-side auth state (e.g., via Context or Zustand).
+    *   Utilize Next.js Middleware for route protection based on session status.
+    *   Pass authenticated Supabase client instance or session token to backend API requests when necessary.
 
-Backend
+Backend (Node.js/Express)
 
-*   **Library**: Utilize `@supabase/supabase-js` in a Node.js/Express backend.
-*   **Role**: Manage API endpoints to authenticate requests through Supabase sessions that comply with RLS.
+*   **Library**: Optionally use `@supabase/supabase-js` (server-side) for admin tasks if needed, but primarily relies on **JWT validation**. Can use libraries like `jsonwebtoken` and `jwks-rsa` or Supabase-provided helpers to verify tokens.
+*   **Role**: Validate Supabase JWTs received in `Authorization` headers from the Next.js frontend for protected API endpoints. Does not manage sessions directly but relies on the validated token for user identification (`auth.uid()`).
 
 ### 4. Setup Guidelines
 
@@ -60,6 +62,7 @@ Supabase Authentication Configuration
 *   **Settings**:
 
     *   Enable email authentication in the Supabase Dashboard under Authentication Settings.
+    *   Configure Site URL and Redirect URLs appropriately for Next.js deployment (e.g., Vercel URLs).
     *   Consider disabling email confirmations in development environments for easier testing.
 
 *   **Third-Party Providers**: Avoid the inclusion of third-party authentication providers unless requested.
@@ -68,96 +71,99 @@ Database Schema and RLS Definition
 
 *   **Schema Requirements**:
 
-    *   Ensure `user_id` is UUID NOT NULL DEFAULT `auth.uid()` in all relevant tables.
+    *   Ensure `user_id` is UUID NOT NULL DEFAULT `auth.uid()` or appropriately references `auth.users(id)` in all relevant tables.
     *   Use UUIDs for primary keys, generated via `uuid_generate_v4()`.
 
 *   **RLS Policies**:
 
     *   **For submissions**:
-
-        *   **SELECT Policy**: Allow access only where `user_id` equals `auth.uid()`.
-        *   **INSERT Policy**: Allow insertion only if `user_id` equals `auth.uid()`.
+        *   **SELECT Policy**: `USING (auth.uid() = user_id)`
+        *   **INSERT Policy**: `WITH CHECK (auth.uid() = user_id)`
+        *   (Define similar policies for `reviews` and `analyses` based on `submission_id` linkage and user ownership of the submission).
 
     *   **Enabling RLS**:
-
         *   Confirm RLS is enabled by executing: `ALTER TABLE <table> ENABLE ROW LEVEL SECURITY`.
 
 Environment Variables
 
 *   **Configuration**:
+    *   **Frontend (`.env.local`):** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+    *   **Backend (`.env` or Railway secrets):** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (if needed for admin tasks), `SUPABASE_JWT_SECRET` (or configure JWKS fetching for validation).
 
-    *   Define `SUPABASE_URL` and `SUPABASE_KEY` using secure environment variable practices.
-    *   Use proper prefixes like `REACT_APP_` for React front-end configurations.
+Supabase Client Integration (Next.js)
 
-Supabase Client Integration
-
-*   **Initialization**: Set up the client with `@supabase/supabase-js` using `SUPABASE_URL` and `SUPABASE_KEY`.
-*   **Session Management**: Leverage automatic session maintenance to authenticate requests effectively.
+*   **Initialization**: Set up Supabase client instances for browser (client components) and server-side (server components, middleware, API routes) contexts. Consider using `@supabase/auth-helpers-nextjs` wrappers or manual setup.
+*   **Session Management**: Leverage Supabase's cookie-based session handling, integrated with Next.js middleware/server components for seamless auth state persistence and validation.
 
 ### 5. Strict Rules for Implementation
 
 Supabase Exclusive Use
 
 *   **Integration**: Do not integrate third-party authentication providers, such as Clerk.
-*   **Functionality**: Implement sign-up, sign-in, and sign-out using Supabase’s auth functions.
+*   **Functionality**: Implement sign-up, sign-in, and sign-out using Supabase's auth functions via the Next.js frontend.
 
 Enforcing RLS
 
-*   **Policy**: Always enable RLS on new tables.
-*   **Schema Control**: Ensure user_id association via `auth.uid()`.
-*   **Data Access**: Avoid manual user ID filtering; rely on RLS.
+*   **Policy**: Always enable RLS on new tables containing user-specific data.
+*   **Schema Control**: Ensure `user_id` association via `auth.uid()` or foreign key reference to `auth.users`.
+*   **Data Access**: Rely on RLS for data filtering in direct Supabase queries (frontend or backend). Backend API should validate user context via JWT before performing actions.
 
-Handling Authentication
+Handling Authentication (Next.js)
 
 *   **Session Management**:
+    *   Use middleware to check session status for protected routes.
+    *   Utilize Supabase `onAuthStateChange` on the client-side (e.g., in an Auth Provider) to update UI state.
+    *   Provide UI for sign-up, sign-in, sign-out in dedicated auth pages/components.
 
-    *   Check session status on application load.
-    *   Listen for authentication state changes.
-    *   Provide a user interface for all authentication-related actions.
+Secure Database Operations & API Calls
 
-Secure Database Operations
-
-*   **Queries**: Conduct all database queries with an authenticated Supabase client.
-*   **Integrity**: Ensure `user_id` is populated via table defaults, not passed manually.
+*   **Frontend Queries**: Use the authenticated Supabase client which respects RLS.
+*   **Backend API Calls**: Frontend must include the Supabase JWT in the `Authorization: Bearer <token>` header.
+*   **Backend Validation**: Backend API must validate the JWT before processing requests.
+*   **Integrity**: Ensure `user_id` is populated via table defaults (`default auth.uid()`) or derived from the validated JWT on the backend, not passed manually in API payloads.
 
 ### 6. Troubleshooting Guidelines
 
 Authentication Errors
 
-*   **401 Unauthorized**:
-
-    *   Verify user sign-in status.
-    *   Inspect the correctness of `SUPABASE_URL` and `SUPABASE_KEY`.
+*   **401 Unauthorized (API)**:
+    *   Verify JWT is present and valid in the `Authorization` header.
+    *   Check backend JWT validation logic (secret or JWKS URL correctness).
+*   **Client-side Auth Issues:**
+    *   Inspect Supabase client initialization (URL/Key).
+    *   Check browser cookies for Supabase session cookie.
 
 RLS Errors
 
 *   **Investigation**:
-
-    *   Confirm RLS policies use `auth.uid()`.
-    *   Verify `user_id` values align with `auth.users.id`.
+    *   Confirm RLS policies use `auth.uid()` correctly.
+    *   Verify JWT validation provides the correct user context (`auth.uid()`) on the backend API.
+    *   Ensure the user performing the action actually owns the data according to the `user_id` column.
 
 Session Challenges
 
 *   **Management**:
-
-    *   Ensure persistent session handling.
-    *   Test that signing out clears all session data properly.
+    *   Verify middleware correctly reads/validates session cookies.
+    *   Ensure `onAuthStateChange` listener is correctly updating client-side state.
+    *   Test sign-out properly clears cookies and client state.
 
 ### 7. Validation Checklist
 
 Authentication Features
 
-*   **Functionality**: Users must be able to sign up, sign in, and sign out seamlessly.
-*   **Session Robustness**: Validate that sessions persist across user interactions and refreshes.
+*   **Functionality**: Users must be able to sign up, sign in, and sign out seamlessly via the Next.js frontend.
+*   **Session Robustness**: Validate that sessions persist across page navigations, browser refreshes, and server/client component interactions.
+*   **Route Protection**: Ensure middleware correctly protects routes and redirects unauthenticated users.
+*   **API Protection**: Ensure backend API endpoints correctly validate JWTs and return 401/403 errors for invalid/unauthorized requests.
 
 Database Security
 
-*   **RLS**: Confirm that data access is appropriately restricted to authenticated users.
-*   **Defaults**: Ensure `user_id` defaults to `auth.uid()`.
+*   **RLS**: Confirm that data access via direct Supabase queries and backend API calls is appropriately restricted based on the authenticated user.
+*   **Defaults**: Ensure `user_id` defaults to `auth.uid()` or is correctly set based on validated context.
 
 Error Handling
 
-*   **Assessment**: Authentication and query errors should be properly caught and displayed to users.
+*   **Assessment**: Authentication and query errors should be properly caught and displayed to users (e.g., using Toasts).
 
 Testing Consistency
 
@@ -165,4 +171,4 @@ Testing Consistency
 
 ### Conclusion
 
-These comprehensive guidelines ensure that RivalRecon maintains a robust, secure, and exclusive Supabase-based authentication system. By adhering strictly to Supabase's native authentication and RLS capabilities, the integration enhances security, reduces complexity, and ensures compliance with project specifications.
+These comprehensive guidelines ensure that RivalRecon maintains a robust, secure, and exclusive Supabase-based authentication system integrated within the Next.js frontend. By adhering strictly to Supabase's native authentication, RLS capabilities, and proper Next.js integration patterns, the application enhances security, reduces complexity, and ensures compliance with project specifications.

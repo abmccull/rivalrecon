@@ -1,3 +1,8 @@
+---
+description: 
+globs: .git
+alwaysApply: false
+---
 
 description: 
 globs: 

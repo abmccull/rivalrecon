@@ -73,8 +73,21 @@ Several critical issues were identified in the communication between the Node.js
    - Add validation to ensure messages meet Celery's expectations
    - Prevent malformed messages from being sent to the queue
 
+## Architecture and Workflow
+
+The main UI is now located in the `/app` directory. All legacy folders have been removed. The Next.js frontend is responsible for sending URL submissions to the Node.js backend, which then processes the tasks and stores the results in Supabase for display in the dashboard.
+
+## Environment Variables
+
+Please ensure that the following environment variables are set:
+
+* `REDIS_URL`: the URL of the Redis instance
+* `CELERY_BROKER_URL`: the URL of the Celery broker
+* `SUPABASE_URL`: the URL of the Supabase instance
+* `SUPABASE_KEY`: the key for the Supabase instance
+
 ## Conclusion
 
 The implemented solution fixes the core issues with task message formatting and Redis command execution. These changes should enable the seamless processing of URL submissions, allowing the system to scrape reviews, analyze them with DeepSeek API, and store the results in Supabase for display in the dashboard.
 
-The solution maintains backward compatibility with existing code while ensuring messages are properly formatted for Celery. This represents a permanent fix rather than a temporary workaround. 
+The solution maintains backward compatibility with existing code while ensuring messages are properly formatted for Celery. This represents a permanent fix rather than a temporary workaround.

@@ -1,8 +1,15 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const submissionsRouter = require('./routes/submissions');
+const webhooksRouter = require('./routes/webhooks');
+
+// Debug: Print environment variables
+console.log('Environment Variables:');
+console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
+console.log('SUPABASE_SERVICE_ROLE_KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? '[PRESENT]' : '[MISSING]');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -10,7 +17,16 @@ const port = process.env.PORT || 3001;
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Debug: Print variables used for client creation
+console.log('Variables used for Supabase client:');
+console.log('supabaseUrl:', supabaseUrl);
+console.log('supabaseKey:', supabaseKey ? '[PRESENT]' : '[MISSING]');
+
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Export supabase client for use in other modules
+module.exports.supabase = supabase;
 
 // Middleware
 app.use(cors());
@@ -47,6 +63,9 @@ const authMiddleware = async (req, res, next) => {
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Webhooks - no auth middleware as these are called directly by Supabase
+app.use('/webhooks', webhooksRouter);
 
 // Protected routes
 app.use('/api/submissions', authMiddleware, submissionsRouter);

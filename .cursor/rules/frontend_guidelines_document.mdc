@@ -1,77 +1,353 @@
 ---
 description: Apply these rules when making changes to the project
-globs:
-alwaysApply: true
+globs: 
+alwaysApply: false
 ---
 
 Update this rule if user requested changes to the project requirement, etc.
-# Frontend Guideline Document
+# Frontend Guidelines Document
 
-This document provides an overview of the frontend architecture, design principles, and technologies used in the RivalRecon project. Designed as a competitive intelligence tool for CPG companies, RivalRecon offers a rich user experience that includes data visualization, interactive dashboards, and seamless user interactions. The document is intended for everyone, whether or not you have a technical background.
-
-## Frontend Architecture
-
-RivalRecon’s frontend is built using React.js, a widely popular JavaScript library for building user interfaces. The application is organized with a component-based architecture to promote reusability and clarity of the code. Here are key aspects of the architecture:
-
-- **Frameworks & Libraries**: The core of the application is built with React.js, supported by Chakra UI for the user interface, Framer Motion for animations, and Plotly.js along with react-wordcloud for data visualizations. React Router is used to manage the navigation between pages.
-- **Scalability & Maintainability**: The component-based structure ensures that each part of the application is modular and can be maintained independently. This setup allows new features to be added with minimal disruptions to existing code. Additionally, using popular libraries that are continuously maintained by the community ensures long-term support and scalability.
-- **Performance**: The architecture supports performance through techniques like lazy loading of components, code splitting, and the efficient rendering capabilities of React. These measures ensure that even as the application grows, users continue to experience fast and responsive interactions.
-
-## Design Principles
-
-In RivalRecon, the design principles are centered around creating a user-friendly and accessible experience:
-
-- **Usability**: The application emphasizes simplicity and clarity. Key functionalities (such as URL submission, dashboard navigation, and report viewing) are designed to be straightforward and intuitive.
-- **Accessibility**: Using Chakra UI and adhering to modern web standards ensures that the UI is accessible to a wide range of users. This includes providing clear, large fonts, and an interface that works well with assistive technologies.
-- **Responsiveness**: The design is mobile-responsive to accommodate various device sizes, ensuring that the dashboard and visualizations scale gracefully on desktops, tablets, and smartphones.
-
-## Styling and Theming
-
-The project follows a modern and clean styling approach to maintain a consistent look and feel throughout the application:
-
-- **CSS Methodology & Frameworks**: The style is managed using CSS-in-JS approaches provided by Chakra UI. This not only simplifies styling components but also ensures that styles are scoped locally. Styling principles such as BEM or SMACSS are implicit in the component designs.
-- **Theming & Visual Style**: The theming strategy is clearly aligned with the RivalRecon brand. The design style is modern with a slight glassmorphism influence in some areas to give a sleek and contemporary look. The chosen color palette includes Deep Blue, Teal, Pale Blue, and Dark Gray to foster trust and clarity.
-- **Fonts**: The primary font used throughout the application is Inter, selected for its readability and modern aesthetic.
+This document outlines the standards and guidelines for frontend development in the RivalRecon application using Next.js, Shadcn UI, and Tailwind CSS.
 
 ## Component Structure
 
-The application is built on a solid component-based approach that is central to React development:
+### Server vs. Client Components
 
-- **Organization**: Components are organized based on their functionality. For example, layout components (headers, footers, sidebars) reside in one directory, while interactive components for forms, dashboards, and visualizations reside in another.
-- **Reusability**: Each component is designed to be reusable across different parts of the application, reducing redundancy and helping maintain consistency. This modular approach speeds up development and simplifies debugging and testing.
+- Use **Server Components** by default for:
+  - Static UI elements
+  - Data fetching
+  - Components that don't need client-side interactivity
+
+- Use **Client Components** (with `"use client"` directive) only when:
+  - Using hooks (useState, useEffect, etc.)
+  - Adding event listeners
+  - Using browser-only APIs
+  - Using client-side libraries that rely on the window object
+
+### Component Organization
+
+Components are organized into the following categories:
+
+1. **UI Components** (`components/ui/`)
+   - Reusable, unstyled components from Shadcn UI
+   - Should be used as building blocks for other components
+   - Generally don't contain business logic
+
+2. **Layout Components** (`components/layout/`)
+   - Components that define the application's structure (Sidebar, Header)
+   - May contain navigation logic but generally minimal business logic
+
+3. **Feature Components** (`components/[feature]/`)
+   - Domain-specific components (e.g., `components/competitor/`)
+   - May contain business logic related to their domain
+   - Should be composed of UI components
+
+4. **Page Components** (`app/*/page.tsx`)
+   - Root components for each route
+   - Handle data fetching for the page
+   - Compose other components to build the page
+
+### Component Naming Conventions
+
+- Use **PascalCase** for component names: `CompetitorCard.tsx`
+- Use **kebab-case** for file names of Shadcn UI components: `card.tsx`
+- Group related components in feature-specific folders
+- If a component has subcomponents, place them in the same file or create a folder:
+  ```
+  components/competitor/
+  ├── competitor-card.tsx
+  ├── competitor-list/
+  │   ├── index.tsx
+  │   ├── competitor-list-item.tsx
+  │   └── competitor-list-header.tsx
+  ```
+
+## Styling Guidelines
+
+### Tailwind CSS Usage
+
+- Use Tailwind CSS utility classes directly in JSX
+- Follow mobile-first responsive design:
+  ```jsx
+  <div className="p-4 md:p-6 lg:p-8">...</div>
+  ```
+- Create consistent spacing using Tailwind's spacing scale
+- Extend the Tailwind theme in `tailwind.config.js` rather than creating custom CSS
+
+### Custom Styling
+
+When Tailwind utilities aren't sufficient:
+
+1. Use `@apply` directives in a module CSS file:
+   ```css
+   .customButton {
+     @apply rounded-md bg-primary text-white px-4 py-2 hover:bg-primary/90;
+   }
+   ```
+
+2. For one-off styling, use inline styles with the `style` prop (sparingly)
+
+3. For complex animations, use Framer Motion or CSS animations
+
+### Color System
+
+Use Tailwind's color system with our custom palette:
+
+- `primary` - Main brand color
+- `secondary` - Secondary brand color
+- `background` - Page backgrounds
+- `foreground` - Text on background
+- `muted` - Subdued backgrounds
+- `accent` - Highlighting elements
+- `destructive` - Error states
+
+Access using CSS variables or Tailwind classes:
+```jsx
+<div className="bg-primary text-primary-foreground">...</div>
+```
 
 ## State Management
 
-Managing state effectively is critical for providing a seamless user experience:
+### Local State
 
-- **Approach**: For this project, state management is handled using React’s built-in hooks and Context API. This means that data relevant to the entire application (like user authentication status and application settings) is stored in a central location and shared with components as needed.
-- **Benefits**: This approach keeps the codebase simpler, making it easier to track changes, debug issues, and scale the application as new features are added.
+- Use `useState` and `useReducer` for component-local state
+- Prefer controlled components for form inputs
+- Use React's Context API for small, localized state sharing
 
-## Routing and Navigation
+### Global State
 
-User-friendly navigation is handled with React Router, ensuring that moving between different sections of the application is smooth and efficient:
+- Use Zustand for global application state
+- Create stores in `lib/store/[feature]-store.ts`
+- Follow this pattern:
 
-- **Routing**: React Router maps different URL paths to their respective components. This allows for a single-page application experience where content updates without full page reloads.
-- **Navigation Structure**: The application includes a clear journey starting from the landing page to user authentication, followed by the main dashboard, and finally the report/export section. This logical flow ensures users can easily reach the features they need.
+```typescript
+// lib/store/competitors-store.ts
+import { create } from 'zustand'
+import { createClient } from '@/lib/supabase'
 
-## Performance Optimization
+interface CompetitorsState {
+  competitors: Competitor[];
+  loading: boolean;
+  error: string | null;
+  fetchCompetitors: () => Promise<void>;
+  // Other actions...
+}
 
-Several strategies are implemented to ensure the frontend remains fast and responsive:
+export const useCompetitorsStore = create<CompetitorsState>((set, get) => ({
+  competitors: [],
+  loading: false,
+  error: null,
+  
+  fetchCompetitors: async () => {
+    set({ loading: true, error: null });
+    try {
+      // Implementation...
+      set({ competitors: data, loading: false });
+    } catch (error: any) {
+      set({ error: error.message, loading: false });
+    }
+  },
+  // Other methods...
+}));
+```
 
-- **Lazy Loading & Code Splitting**: Components are loaded on demand rather than all at once, reducing initial load times and improving performance.
-- **Asset Optimization**: Images, fonts, and other static assets are optimized and delivered using efficient strategies backed by the deployment environment (Vercel for the frontend).
-- **Smooth Animations**: Framer Motion is used to provide smooth transitions and animations that do not negatively impact the overall performance.
+## Forms and Validation
 
-## Testing and Quality Assurance
+- Use React Hook Form for form state management
+- Use Zod for form validation
+- Use Shadcn UI form components for consistency
 
-Ensuring the quality and reliability of the frontend is vital. The testing strategy includes:
+Example pattern:
 
-- **Unit Testing**: Critical functionalities and individual components are tested using tools such as Jest and React Testing Library.
-- **Integration Testing**: Interaction between components is carefully tested to ensure that they work together as expected.
-- **End-to-End Testing**: Simulated user workflows, such as navigating from the login page to dashboard updates after URL submission, are tested using frameworks like Cypress. This helps catch issues that might occur during the user’s interaction with the application.
+```typescript
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
-## Conclusion and Overall Frontend Summary
+const formSchema = z.object({
+  name: z.string().min(3, { message: "Name must be at least 3 characters" }),
+  // other fields...
+});
 
-The frontend of RivalRecon is designed to deliver a modern, responsive, and user-centric experience. Built on React.js and enhanced by libraries such as Chakra UI, Framer Motion, and Plotly.js, the architecture is both scalable and maintainable. The design emphasizes usability, accessibility, and responsiveness, ensuring that users receive actionable insights through an intuitive dashboard. With a clear component structure, effective state management, smooth navigation, optimized performance, and rigorous testing, the frontend setup is aligned with the overall goals of providing fast, secure, and actionable insights in the world of competitive intelligence.
+export function CompetitorForm() {
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+    },
+  });
 
-This comprehensive guide reflects the project requirements and technologies utilized, ensuring that any team member—from non-technical stakeholders to experienced developers—can understand and contribute to the success of RivalRecon.
+  function onSubmit(values: z.infer<typeof formSchema>) {
+    // Handle submission
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Name</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit">Submit</Button>
+      </form>
+    </Form>
+  );
+}
+```
+
+## Data Fetching
+
+### In Server Components
+
+- Fetch data directly in Server Components:
+  ```typescript
+  export default async function CompetitorPage() {
+    const supabase = createServerClient();
+    const { data } = await supabase.from('competitors').select('*');
+    return <CompetitorList competitors={data} />;
+  }
+  ```
+
+### In Client Components
+
+- Create custom hooks for data fetching:
+  ```typescript
+  // Using React Query
+  export function useCompetitors() {
+    return useQuery({
+      queryKey: ['competitors'],
+      queryFn: async () => {
+        const supabase = createClient();
+        const { data, error } = await supabase.from('competitors').select('*');
+        if (error) throw error;
+        return data;
+      }
+    });
+  }
+
+  // Simple Custom Hook
+  export function useCompetitors() {
+    const [competitors, setCompetitors] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+      async function fetchCompetitors() {
+        try {
+          // Implementation...
+        } catch (error) {
+          // Error handling...
+        }
+      }
+      fetchCompetitors();
+    }, []);
+
+    return { competitors, loading, error };
+  }
+  ```
+
+## Performance Considerations
+
+- Use proper image optimization with `next/image`
+- Implement appropriate caching strategies for data fetching
+- Lazy load components and routes when appropriate
+- Use the `useCallback` and `useMemo` hooks for expensive computations
+- Avoid unnecessary renders with proper state management
+- Use Server Components whenever possible to reduce JS bundle size
+
+## Accessibility Standards
+
+- All interactive elements must be keyboard accessible
+- Use semantic HTML elements
+- Ensure proper contrast ratios for text
+- Provide `aria-*` attributes where necessary
+- Add proper focus management for modals, dialogs, etc.
+- Test with screen readers
+
+## Testing
+
+- Write unit tests for utility functions
+- Write component tests using React Testing Library
+- Focus on testing behavior, not implementation details
+- For complex components, create test IDs:
+  ```jsx
+  <button data-testid="delete-competitor-btn">Delete</button>
+  ```
+
+## Recommended Patterns
+
+### Compound Components
+
+```jsx
+function Tabs({ children }) {
+  const [activeTab, setActiveTab] = useState(0);
+  return (
+    <TabsContext.Provider value={{ activeTab, setActiveTab }}>
+      {children}
+    </TabsContext.Provider>
+  );
+}
+
+Tabs.List = function TabsList({ children }) {
+  return <div className="flex space-x-2">{children}</div>;
+};
+
+Tabs.Tab = function Tab({ children, index }) {
+  const { activeTab, setActiveTab } = useTabsContext();
+  return (
+    <button 
+      className={activeTab === index ? "active" : ""} 
+      onClick={() => setActiveTab(index)}
+    >
+      {children}
+    </button>
+  );
+};
+
+Tabs.Content = function TabsContent({ children, index }) {
+  const { activeTab } = useTabsContext();
+  if (activeTab !== index) return null;
+  return children;
+};
+```
+
+### Conditional Rendering
+
+```jsx
+{isLoading ? (
+  <LoadingSpinner />
+) : error ? (
+  <ErrorMessage message={error} />
+) : data.length > 0 ? (
+  <DataList items={data} />
+) : (
+  <EmptyState />
+)}
+```
+
+## Code Organization
+
+- Import order:
+  1. React/Next.js imports
+  2. External library imports
+  3. Internal components/hooks/utils
+  4. Types
+  5. Styles
+
+- Declare types and interfaces at the top of the file or in a separate types file
+- Keep components focused on a single responsibility
+- Extract complex logic into custom hooks
+
+This guide serves as a reference for maintaining consistent, high-quality frontend code throughout the RivalRecon application. Follow these guidelines to ensure a coherent development experience and a polished end product.

@@ -5,178 +5,157 @@ alwaysApply: true
 ---
 
 Update this rule if user requested changes to the project requirement, etc.
-# RivalRecon Implementation Plan
 
-This document outlines the next steps and a high-level implementation plan for RivalRecon with a focus on secure design, robust architecture, and adherence to best coding practices.
+# RivalRecon Security Guidelines (Post Next.js Migration)
+
+This document outlines security considerations and best practices for RivalRecon, focusing on secure design, robust architecture, and adherence to best coding practices, reflecting the frontend migration to Next.js.
 
 ---
 
 ## 1. System Architecture Overview
 
 - **Frontend:**
-  - Framework: React.js
-  - UI Library: Chakra UI
-  - Animations: Framer Motion
-  - Data Visualization: Plotly.js, react-wordcloud
-  - Routing: React Router
+  - Framework: **Next.js (App Router)**
+  - UI Library: **Shadcn UI (using Radix UI & Tailwind CSS)**
+  - Styling: **Tailwind CSS**
+  - Data Visualization: Plotly.js, react-d3-cloud
+  - Routing: **Next.js File-based Routing**
+  - Icons: **Lucide React**
   - Security Notes:
-    - Use HTTPS endpoints exclusively
-    - Implement secure storage for authentication tokens
-    - Enforce CSP and other security headers
-    - Ensure mobile-responsive design
+    - Use HTTPS exclusively.
+    - Leverage Supabase secure cookie storage for session management (HttpOnly, Secure, SameSite enforced by Supabase/Next.js middleware).
+    - Implement Content Security Policy (CSP) headers (via `next.config.mjs` or Vercel).
+    - Ensure Server Component props are validated and data passed to Client Components is sanitized.
+    - Validate all form inputs (client and server-side where applicable, e.g., using Zod).
+    - Ensure mobile-responsive design (Tailwind).
 
 - **Backend:**
   - Framework: Node.js with Express
   - Background Jobs: Celery and Redis
-  - API Integrations: Scrapy (for Shopify scraping), Puppeteer (for scraping review platforms), Rapid API (for Amazon scraping), DeepSeek API (for AI analysis)
+  - API Integrations: Scrapy, Puppeteer, Rapid API, DeepSeek API
   - Security Considerations:
-    - Validate and sanitize all incoming data
-    - Use parameterized queries and ORMs with Supabase (PostgreSQL)
-    - Manage secrets using environment variables or secured secret manager (avoid hardcoding)
-    - Enforce rate limiting and throttling to protect endpoints
+    - **Validate and sanitize all incoming data from API requests.**
+    - Use parameterized queries or ORMs with Supabase (PostgreSQL).
+    - Manage secrets using environment variables (Railway secrets management).
+    - **Validate Supabase JWT tokens on all protected endpoints.**
+    - Enforce rate limiting and throttling.
 
 - **Authentication & Authorization:**
-  - Tool: Clerk
+  - Tool: **Supabase Authentication**
   - Implementation:
-    - Enforce robust authentication and session management
-    - Implement secure session-scoped tokens and cookie security (HttpOnly, Secure, SameSite)
-    - Validate roles and privileges on every API call
+    - Enforce robust authentication via Supabase (email/password, potentially others).
+    - **Session Management:** Handled primarily by Supabase client libraries (using secure cookies) and Next.js middleware/server-side checks.
+    - **Authorization:** Validate user roles/permissions via Supabase JWT claims on backend API calls. Implement Row Level Security (RLS) in Supabase database.
 
 - **Payment Processing:**
   - Provider: Stripe
-  - Use secure webhooks and encryption for sensitive data handling
+  - Use secure webhooks (verify signatures) and encryption for sensitive data handling.
 
 - **Deployment and Infrastructure:**
-  - Frontend: Deployed using Vercel
+  - Frontend: Deployed using **Vercel** (optimized for Next.js).
   - Backend: Railway
-  - Database: Supabase (PostgreSQL) with secure connections enforced
-  - All connections use TLS 1.2+ and up-to-date cipher suites
+  - Database: Supabase (PostgreSQL) with secure connections enforced.
+  - All connections use TLS 1.2+ and up-to-date cipher suites.
 
 ---
 
-## 2. Core Features & Milestones
+## 2. Core Features & Milestones (Security Focus)
 
 ### 2.1 User Management & Subscription
 
 - **User Roles:**
-  - Single user profile for MVP
-  - Enforce analysis limits based on subscription plan (Free, $19.99, $49.99 tiers)
+  - Single user profile for MVP.
+  - Enforce analysis limits based on subscription plan (validation likely needed on backend API).
 - **Security Measures:**
-  - Secure session management with Clerk’s authentication
-  - RBAC enforced on protected endpoints
+  - Secure session management via Supabase Auth and Next.js integration.
+  - Authorization enforced on protected frontend routes (via Middleware) and backend API endpoints (via token validation).
 
 ### 2.2 Data Scraping & Processing
 
-- **Scraping Components:**
-  - Shopify Scrapy integration for product reviews
-  - Puppeteer-based scraping for Yotpo, TrustPilot, Loox, Judge.me
-  - Rapid API integration for Amazon reviews
+- **Scraping Components:** (Backend responsibility)
   - Input Validation:
-    - Sanitize URLs and user inputs
-    - Validate scraped content before processing
-- **Error Handling:"
-  - Provide user-friendly error messages upon failures
-  - Log errors securely without exposing stack traces to users
+    - Sanitize URLs and user inputs **on the backend** before initiating scraping.
+    - Validate scraped content before processing.
+- **Error Handling:**
+  - Provide user-friendly error messages on frontend (e.g., Shadcn Toast).
+  - Log detailed errors securely on the backend without exposing sensitive info.
 
 ### 2.3 AI Analysis Integration
 
-- **DeepSeek API:**
-  - Send valid, sanitized data for analysis
-  - Default settings used initially
-  - Handle API errors gracefully and provide corrective actions in the UI
+- **DeepSeek API:** (Backend responsibility)
+  - Send valid, sanitized data for analysis.
+  - Handle API errors gracefully on backend, relay user-friendly status to frontend.
 
 ### 2.4 Dashboard & Reporting
 
 - **Visualizations:**
-  - Dashboard will include a variety of charts: Pie, Line, Bar, Radar, Scatter, Heatmap, Gauge, and Word Cloud
-  - Use Plotly.js and react-wordcloud for dynamic charting
-  - Ensure output encoding and safe data rendering to prevent XSS
+  - Use Plotly.js and react-d3-cloud within Next.js Client Components.
+  - Ensure data passed to visualization libraries is properly structured.
+  - **Sanitize any user-generated content displayed in charts/text to prevent XSS.**
 - **Export Options:**
-  - PDF and CSV download for analysis results
+  - Ensure data exported (PDF/CSV) is scoped to the authorized user (backend responsibility).
 
 ---
 
 ## 3. UI/UX & Branding
 
 - **Brand Guidelines:**
-  - Color Palette: Deep Blue, Teal, Pale Blue, Dark Gray
-  - Typography: Inter Font
-  - Logo: Clean and modern design reflecting competitive intelligence
+  - Color Palette: Deep Blue, Teal, Pale Blue, Dark Gray (Implement via Tailwind theme/CSS variables).
+  - Typography: Inter Font (Configure via Tailwind/globals.css).
+  - Logo: Clean and modern design.
 - **Design Tokens:**
-  - Use Chakra UI theming for consistency
+  - Utilize Tailwind theme configuration (`tailwind.config.ts`) and CSS variables for consistency (aligned with Shadcn theming).
 
 ---
 
 ## 4. Security and Privacy Considerations
 
 - **Data Protection:**
-  - Encrypt sensitive data in transit (TLS 1.2+) and at rest (AES-256 for storage)
+  - Encrypt sensitive data in transit (TLS 1.2+) and at rest (Supabase handles DB encryption).
 - **Secrets Management:**
-  - Use environment variables or a dedicated secrets management solution
+  - Frontend: Use `NEXT_PUBLIC_` prefix only for non-sensitive, browser-exposed keys. Server-side Next.js logic can access other env vars.
+  - Backend: Use Railway environment variable management.
 - **API Security:**
-  - Validate and sanitize all inputs
-  - Use rate limiting on API endpoints
-  - Implement secure error handling (fail securely without leaking internal system data)
+  - Validate and sanitize all inputs on backend API endpoints.
+  - Use rate limiting on backend API endpoints.
+  - Implement secure error handling (fail securely).
+  - **Enforce CORS correctly on the backend API (Express).**
 - **Session Management:**
-  - Secure cookie settings (HttpOnly, Secure, SameSite) and regular session timeout enforcement
+  - Rely on Supabase Auth secure cookie management.
+  - Implement session checks in Next.js middleware and potentially Server Components.
 
 ---
 
 ## 5. Infrastructure and DevOps
 
-- **Server Hardening:**
-  - Disable unnecessary services and minimize exposed ports
-  - Keep dependencies updated with vulnerability scanning (using SCA tools and lockfiles)
+- **Server Hardening:** (Primarily Backend/Railway responsibility)
+  - Keep dependencies updated (Frontend & Backend) with vulnerability scanning (e.g., `npm audit`, GitHub Dependabot).
 - **Deployment Security:**
-  - Continuous Integration/Continuous Deployment (CI/CD) pipelines configured with security checks
-  - Debug features disabled in production
+  - CI/CD pipelines (e.g., Vercel for frontend, GitHub Actions for backend?) configured with security checks.
+  - Vercel provides many security features out-of-the-box for Next.js.
 
 ---
 
-## 6. Next Steps & Task Breakdown
+## 6. Next Steps & Task Breakdown (Security Focus)
 
-### 6.1 Planning and Setup
-
-- Set up project repositories with strict access controls
-- Configure CI/CD pipelines with built-in security scanning
-- Define environment configurations with secure defaults (TLS, database credentials, etc.)
-
-### 6.2 Frontend Development
-
-- Scaffold React project and integrate Chakra UI, React Router
-- Develop components for input forms, dashboard visualizations, and export options
-- Implement secure token handling and local input sanitization
-
-### 6.3 Backend Development
-
-- Scaffold Express server with secure middleware (helmet, rate-limiters, CORS settings)
-- Integrate scraping tools with robust error handling and input validation
-- Develop endpoints for AI analysis requests, subscription management, and dashboard data retrieval
-- Secure database access with parameterized queries and ORM capabilities
-
-### 6.4 Testing & QA
-
-- Unit tests, integration tests, and penetration tests
-- Validate all input handling, session management, and output encoding
-- Perform vulnerability scans on dependencies and static code analysis
-
-### 6.5 Deployment & Monitoring
-
-- Deploy frontend to Vercel, backend to Railway; ensure HTTPS is enforced
-- Monitor application performance and error logs (initially minimal analytics for MVP)
-- Plan for future integration of comprehensive analytics/monitoring
+*(Refers to the detailed migration plan in implementation_plan.mdc)*
+- **Ensure Supabase RLS policies are correctly implemented and enforced.**
+- **Implement robust JWT validation middleware in the backend Express application.**
+- **Configure CSP and other security headers in Next.js/Vercel.**
+- **Set up secure handling of Stripe webhooks on the backend.**
+- **Perform security reviews during frontend component development (input validation, output encoding).**
 
 ---
 
 ## 7. Summary
 
-This implementation plan for RivalRecon adheres to secure design principles and best practices:
+This security plan for RivalRecon, updated for the Next.js frontend, emphasizes:
 
-- Secure defaults and robust authentication & authorization
-- Rigorous input validation and secure communication between components
-- Compliance with security principles such as Least Privilege, Defense in Depth, and Fail Securely
-
-The development will progressively incorporate additional features and security enhancements as the project evolves, ensuring that even the MVP is built with a strong security posture from day one.
+- Secure defaults (Supabase Auth, Next.js, Vercel).
+- Robust authentication & authorization across frontend and backend.
+- Rigorous input validation (client-side via forms, server-side on API).
+- Secure communication and session management.
+- Compliance with security principles (Least Privilege, Defense in Depth, Fail Securely).
 
 ---
 

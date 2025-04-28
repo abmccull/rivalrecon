@@ -8,7 +8,7 @@ Update this rule if user requested changes to the project requirement, etc.
 flowchart TD
     LP[Landing Page]
     GS[Get Started]
-    UL[User Login - Clerk]
+    UL[User Login - Supabase Auth (Next.js)]
     MD[Main Dashboard]
     SC[Subscription Check - Stripe]
     URL[URL Submission]
@@ -33,3 +33,8 @@ flowchart TD
     ID --> RP
     DS --> EH
     AI --> EH
+
+    subgraph Note
+        direction TB
+        NoteText("Note: Frontend implementation (LP, GS, MD, ID, CI, RP, EH) is migrating to Next.js, Shadcn UI, and Tailwind CSS. Backend steps (DS, AI, DB, SC) remain unchanged.")
+    end

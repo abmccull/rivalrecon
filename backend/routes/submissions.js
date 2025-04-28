@@ -1,13 +1,10 @@
 const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
 const TaskManager = require('../services/taskManager');
 const redis = require('../config/redis');
 const router = express.Router();
 
-// Initialize Supabase client
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Get Supabase client from parent module
+const supabase = require('../index').supabase;
 
 // Initialize TaskManager with Redis URL
 const taskManager = new TaskManager(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -15,14 +12,14 @@ const taskManager = new TaskManager(process.env.REDIS_URL || 'redis://localhost:
 // Submit URL for analysis
 router.post('/', async (req, res) => {
   try {
-    const { url } = req.body;
+    const { url, is_competitor_product = false } = req.body;
     const userId = req.user.id;
 
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    console.log(`Processing submission for URL: ${url} from user: ${userId}`);
+    console.log(`Processing submission for URL: ${url} from user: ${userId}, Is competitor product: ${is_competitor_product}`);
 
     // Create submission record
     const { data: submission, error: submissionError } = await supabase
@@ -31,7 +28,8 @@ router.post('/', async (req, res) => {
         {
           url,
           user_id: userId,
-          status: 'pending'
+          status: 'pending',
+          is_competitor_product
         }
       ])
       .select()

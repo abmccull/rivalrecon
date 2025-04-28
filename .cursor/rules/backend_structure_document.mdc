@@ -1,203 +1,541 @@
 ---
 description: Apply these rules when making changes to the project
-globs:
-alwaysApply: true
+globs: 
+alwaysApply: false
 ---
 
 Update this rule if user requested changes to the project requirement, etc.
 # Backend Structure Document
 
-This document outlines the backend architecture for the RivalRecon project, a competitive intelligence tool designed for CPG companies. It details the design, database management, APIs, hosting, infrastructure, security, monitoring, and overall approach. The explanation uses everyday language to ensure clarity even if you’re not technically inclined.
-
-## Backend Architecture
-
-RivalRecon’s backend is built to be scalable, maintainable, and reliable. Here are its key architectural aspects:
-
-*   **Technology Frameworks:**
-
-    *   *Node.js* with *Express* handles the main server operations and REST endpoints.
-    *   *Celery* (a Python-based tool) is used for managing asynchronous tasks, such as data scraping and AI-driven analysis, with *Redis* acting as the task queue and caching layer.
-
-*   **Design Patterns:**
-
-    *   The backend uses a modular pattern where different concerns (like authentication, scraping, analysis, etc.) are isolated in separate modules.
-    *   RESTful principles guide API design, ensuring that each endpoint clearly defines its purpose.
-
-*   **Scalability & Performance:**
-
-    *   By offloading heavy processes (like scraping and analysis) to background workers, the server remains responsive.
-    *   The use of Redis for caching helps speed up repetitive tasks and reduces load on the database.
-
-*   **Integration with External Services:**
-
-    *   **User Authentication:** Clerk manages secure sign-up and login processes.
-    *   **Scraping Engines:** Scrapy, Puppeteer, and Rapid API handle data extraction from various review platforms.
-    *   **AI Analysis:** DeepSeek API is integrated to process review data and derive insights.
-
-## Database Management
-
-RivalRecon uses Supabase, powered by PostgreSQL, to manage all its data needs. Here’s how data is handled:
-
-*   **Database Type:**
-
-    *   SQL (PostgreSQL through Supabase)
-
-*   **Data Management Practices:**
-
-    *   Data is structured into logical tables for users, submissions, reviews, and analyses.
-    *   Relationships between tables (for example, linking submissions to the user and analyses to submissions) ensure data consistency.
-    *   Standard SQL queries are used for data retrieval and manipulation, facilitating straightforward maintenance and scalability.
-
-## Database Schema
-
-Below is a human-readable depiction of the database schema. This is followed by sample SQL statements that define the schema.
-
-### Human Readable Description:
-
-*   **users:** Managed by Clerk. Each record includes a `user_id` and user information.
-
-*   **submissions:** Records each product URL submitted by users. Fields include:
-
-    *   URL of the product
-    *   User identifier (linking to the `users` table)
-    *   Status of the scraping process (e.g., completed, in-progress, or failed)
-    *   Timestamp of submission
-
-*   **reviews:** Contains scraped review data with fields such as:
-
-    *   Product name, brand, and category
-    *   Overall rating
-    *   Review text and review date
-    *   Link to the relevant submission
-
-*   **analyses:** Contains the processed data and insights from reviews. Fields include:
-
-    *   Reference to the original submission
-    *   Time-series of ratings
-    *   Trending insights, top positives, and negatives
-    *   Word map for common terms
-    *   Competitive insights and identified opportunities
-
-### Sample SQL Schema (PostgreSQL):
-
--- USERS table (managed by Clerk, so not created manually, but referenced)
-
--- SUBMISSIONS table CREATE TABLE submissions ( id SERIAL PRIMARY KEY, url TEXT NOT NULL, user_id TEXT NOT NULL, -- links to Clerk managed user status VARCHAR(50) NOT NULL, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP );
-
--- REVIEWS table CREATE TABLE reviews ( id SERIAL PRIMARY KEY, product_name TEXT NOT NULL, brand_name TEXT, category TEXT, overall_rating NUMERIC, review_text TEXT, review_date DATE, submission_id INTEGER REFERENCES submissions(id) ON DELETE CASCADE );
-
--- ANALYSES table CREATE TABLE analyses ( id SERIAL PRIMARY KEY, submission_id INTEGER REFERENCES submissions(id) ON DELETE CASCADE, ratings_over_time JSONB, trending JSONB, top_positives JSONB, top_negatives JSONB, word_map JSONB, competitive_insights JSONB, opportunities JSONB, created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP );
-
-## API Design and Endpoints
-
-The backend uses a RESTful design. Each endpoint is created with a clear purpose, helping the front end interact effortlessly with backend services. Here’s an overview:
-
-*   **Authentication & User Management:**
-
-    *   Endpoints handle user sign-up, login, and profile management via Clerk integration.
-
-*   **Data Scraping:**
-
-    *   Endpoints accept product URLs and initiate scraping jobs using available scrapers (Scrapy, Puppeteer, and Rapid API for Amazon).
-    *   Example Endpoint: POST `/api/scrape` – Accepts the URL, triggers the scraping job, and returns a status message.
-
-*   **Analysis and AI Processing:**
-
-    *   Endpoints trigger background analysis jobs using DeepSeek API.
-    *   Example Endpoint: POST `/api/analyze` – Initiates review processing and analysis once scraping is complete.
-
-*   **Dashboard Data & Reporting:**
-
-    *   Endpoints provide data for dashboards and exports in CSV or PDF formats.
-    *   Example Endpoint: GET `/api/dashboard/:submission_id` – Retrieves processed insights for visualization.
-    *   Example Endpoint: GET `/api/report/:submission_id` – Exports analysis reports.
-
-## Hosting Solutions
-
-RivalRecon’s backend, frontend, and database are hosted on specialized platforms to ensure reliability and scalability:
-
-*   **Backend Hosting:**
-
-    *   Railway is used for hosting the Node.js server and Celery worker processes.
-
-*   **Frontend Hosting:**
-
-    *   Vercel handles the deployment of the React-based interface, ensuring a fast and modern user experience.
-
-*   **Database Hosting:**
-
-    *   Supabase, which uses PostgreSQL, is used for all backend data storage needs.
-
-*   **Benefits:**
-
-    *   These hosting solutions offer automatic scaling, reliable uptime, and competitive cost-effectiveness. They also simplify the process of deploying updates and managing SSL certificates for custom domains.
-
-## Infrastructure Components
-
-Several infrastructure components work together to deliver high performance and a smooth user experience:
-
-*   **Load Balancers:**
-
-    *   Managed by Railway and/or underlying cloud provider to distribute incoming requests evenly across server instances.
-
-*   **Caching:**
-
-    *   Redis is used not only as a task queue for Celery but also for caching frequent queries and reducing database load.
-
-*   **Content Delivery Network (CDN):**
-
-    *   Vercel provides CDN capabilities to ensure that static assets and frontend requests are delivered quickly to users globally.
-
-*   **Task Queue & Async Processing:**
-
-    *   Celery handles background tasks (like scraping and AI analysis) ensuring that heavy operations do not block user interactions.
-
-## Security Measures
-
-Security is a top priority in the RivalRecon backend. Some of the measures put in place include:
-
-*   **Authentication & Authorization:**
-
-    *   Clerk is used to manage secure user sign-up and login, ensuring only authenticated users can access their data.
-
-*   **Data Encryption:**
-
-    *   All sensitive data transmitted between the client and server is encrypted using SSL.
-    *   The custom domain comes with SSL certificates, ensuring data remains private and secure.
-
-*   **Rate Limiting:**
-
-    *   APIs enforce rate limits based on subscription tiers to prevent abuse of scraping and analysis functionalities.
-
-*   **Payment and Subscription Security:**
-
-    *   Stripe handles payment processing, ensuring transaction security and compliance with financial regulations.
-
-## Monitoring and Maintenance
-
-To keep the backend running smoothly, several monitoring and maintenance strategies are implemented:
-
-*   **Performance Monitoring:**
-
-    *   Railway provides logging, error tracking, and performance metrics for the backend services.
-    *   Additional monitoring tools can be incorporated to track server health and API response times.
-
-*   **Regular Updates:**
-
-    *   The codebase and dependencies are regularly updated to address security vulnerabilities and improve performance.
-
-*   **Maintenance Strategies:**
-
-    *   Scheduled maintenance windows and automated backups help ensure data integrity and system reliability.
-
-## Conclusion and Overall Backend Summary
-
-The RivalRecon backend is built on a modern and scalable architecture that effectively supports its main features:
-
-*   It leverages a modular design using Node.js, Express, and Celery with Redis to handle both synchronous and asynchronous tasks.
-*   The relational database managed by Supabase (PostgreSQL) is structured in a way that supports complex data relationships with ease.
-*   RESTful APIs provide a clear and direct communication channel between the frontend and backend, supporting secure data scraping, analysis, and dashboard rendering.
-*   Hosting services like Railway, Vercel, and Supabase ensure a reliable, scalable, and cost-effective environment.
-*   Thoughtful integration of security measures such as Clerk authentication, SSL encryption, rate limiting, and Stripe for payments guarantee data protection and regulatory compliance.
-
-Overall, this backend setup is designed to meet the project’s needs efficiently while offering room for future upgrades and enhancements, setting RivalRecon apart as a robust, intelligent tool for competitive analysis in the CPG marketplace.
+This document outlines the backend architecture for the RivalRecon application, which uses Next.js API Routes and Supabase as the primary backend technologies.
+
+## Architecture Overview
+
+The backend of RivalRecon is built using a combination of:
+
+1. **Next.js API Routes** - For handling API requests and server-side logic
+2. **Supabase** - For database storage, authentication, and real-time functionality
+3. **Edge Functions** - For specialized serverless functions that require additional processing
+
+This architecture provides a scalable, maintainable, and secure foundation for the application.
+
+## Next.js API Routes Structure
+
+API routes are organized in the `app/api` directory following the App Router pattern:
+
+```
+app/
+├── api/
+│   ├── auth/
+│   │   └── [...supabase]/
+│   │       └── route.ts       # Handles auth callbacks from Supabase
+│   │   ├── competitors/
+│   │   │   ├── route.ts           # GET, POST handlers for competitors collection
+│   │   │   └── [id]/
+│   │   │   │   └── route.ts       # GET, PUT, DELETE handlers for specific competitor
+│   │   │   ├── reports/
+│   │   │   │   ├── route.ts           # Handlers for reports collection
+│   │   │   │   ├── [id]/
+│   │   │   │   │   └── route.ts       # Handlers for specific report
+│   │   │   │   └── generate/
+│   │   │   │   │   └── route.ts       # Handler for report generation
+│   │   │   └── webhooks/
+│   │   │       └── route.ts          # Webhooks for external integrations
+```
+
+### API Route Implementation Pattern
+
+Each API route follows a consistent pattern:
+
+```typescript
+// app/api/competitors/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { z } from 'zod';
+
+// Define validation schema for request body
+const competitorSchema = z.object({
+  name: z.string().min(1),
+  website: z.string().url().optional(),
+  industry: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export async function GET(request: NextRequest) {
+  const supabase = createRouteHandlerClient({ cookies });
+  
+  // Check authentication
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  // Get query parameters
+  const searchParams = request.nextUrl.searchParams;
+  const query = searchParams.get('query') || '';
+  
+  // Fetch data from Supabase
+  const { data, error } = await supabase
+    .from('competitors')
+    .select('*')
+    .ilike('name', `%${query}%`)
+    .order('name');
+    
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  
+  return NextResponse.json(data);
+}
+
+export async function POST(request: NextRequest) {
+  const supabase = createRouteHandlerClient({ cookies });
+  
+  // Check authentication
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  // Parse and validate request body
+  try {
+    const body = await request.json();
+    const validatedData = competitorSchema.parse(body);
+    
+    // Add user ID to the data
+    const dataWithUser = {
+      ...validatedData,
+      user_id: session.user.id,
+    };
+    
+    // Insert into Supabase
+    const { data, error } = await supabase
+      .from('competitors')
+      .insert(dataWithUser)
+      .select()
+      .single();
+      
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    
+    return NextResponse.json(data, { status: 201 });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.errors }, { status: 400 });
+    }
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+  }
+}
+```
+
+## Supabase Database Schema
+
+The Supabase database is structured with the following tables:
+
+### Core Tables
+
+1. **profiles**
+   - Stores user profile information
+   - Linked to Supabase Auth users
+   - Fields: id (UUID), email, full_name, avatar_url, created_at, updated_at
+
+2. **competitors**
+   - Stores information about competitors being tracked
+   - Fields: id (UUID), name, website, industry, notes, user_id (FK to profiles), created_at, updated_at
+
+3. **products**
+   - Stores product information for competitors
+   - Fields: id (UUID), name, description, price, competitor_id (FK to competitors), created_at, updated_at
+
+4. **reports**
+   - Stores generated reports
+   - Fields: id (UUID), title, description, date_range, user_id (FK to profiles), created_at, updated_at
+
+5. **report_items**
+   - Stores individual items within reports
+   - Fields: id (UUID), report_id (FK to reports), item_type, content, order, created_at, updated_at
+
+### Junction Tables
+
+1. **competitor_tags**
+   - Links competitors with tags
+   - Fields: id (UUID), competitor_id (FK to competitors), tag_id (FK to tags)
+
+2. **report_competitors**
+   - Links reports with competitors
+   - Fields: id (UUID), report_id (FK to reports), competitor_id (FK to competitors)
+
+### Reference Tables
+
+1. **tags**
+   - Stores categorization tags
+   - Fields: id (UUID), name, color, created_at, updated_at
+
+### Row-Level Security (RLS) Policies
+
+All tables implement RLS policies to ensure data security:
+
+```sql
+-- Example RLS policy for the competitors table
+CREATE POLICY "Users can only see their own competitors"
+ON competitors
+FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own competitors"
+ON competitors
+FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own competitors"
+ON competitors
+FOR UPDATE
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own competitors"
+ON competitors
+FOR DELETE
+USING (auth.uid() = user_id);
+```
+
+## Authentication
+
+Authentication is handled by Supabase Auth with Next.js integration:
+
+1. **Server-Side Authentication**
+   - Uses `createServerComponentClient` from `@supabase/auth-helpers-nextjs`
+   - Implemented in Server Components for protected routes
+
+2. **Client-Side Authentication**
+   - Uses `createClientComponentClient` from `@supabase/auth-helpers-nextjs`
+   - Implemented in Client Components for login/signup forms and user profile
+
+3. **Middleware Authentication**
+   - Uses `createMiddlewareClient` from `@supabase/auth-helpers-nextjs`
+   - Implemented in `middleware.ts` to protect routes
+
+### Authentication Flow
+
+```typescript
+// middleware.ts
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+  const supabase = createMiddlewareClient({ req, res });
+  
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  // Protect dashboard routes
+  if (!session && req.nextUrl.pathname.startsWith('/dashboard')) {
+    const redirectUrl = new URL('/login', req.url);
+    redirectUrl.searchParams.set('redirectTo', req.nextUrl.pathname);
+    return NextResponse.redirect(redirectUrl);
+  }
+  
+  return res;
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/api/:path*'],
+};
+```
+
+## Edge Functions (Supabase)
+
+For complex processing that doesn't fit into the Next.js API Routes, we use Supabase Edge Functions:
+
+1. **Data Scraping Function**
+   - Scrapes competitor websites for product information
+   - Triggered by a scheduled cron job or manually through the UI
+
+2. **Report Generation Function**
+   - Generates PDF reports based on competitor data
+   - Called when a user requests a new report
+
+### Edge Function Implementation Pattern
+
+```typescript
+// Example Edge Function (supabase/functions/scrape-competitor/index.ts)
+import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const { competitorId } = await req.json();
+    
+    // Create Supabase client
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+    
+    // Get competitor info
+    const { data: competitor, error: fetchError } = await supabaseClient
+      .from('competitors')
+      .select('*')
+      .eq('id', competitorId)
+      .single();
+      
+    if (fetchError) {
+      throw fetchError;
+    }
+    
+    // Scrape website
+    const response = await fetch(competitor.website);
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    
+    // Extract information (example)
+    const products = [];
+    $('.product').each((i, el) => {
+      products.push({
+        name: $(el).find('.product-name').text(),
+        price: $(el).find('.product-price').text(),
+        description: $(el).find('.product-description').text(),
+      });
+    });
+    
+    // Store scraped data
+    const { error: insertError } = await supabaseClient
+      .from('products')
+      .upsert(
+        products.map(product => ({
+          competitor_id: competitorId,
+          name: product.name,
+          price: product.price,
+          description: product.description,
+        }))
+      );
+      
+    if (insertError) {
+      throw insertError;
+    }
+    
+    return new Response(
+      JSON.stringify({ success: true, products: products.length }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { 
+        status: 400, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
+  }
+});
+```
+
+## Data Access Layer
+
+To ensure consistent database access patterns, a data access layer is implemented:
+
+### Server-Side Data Access
+
+```typescript
+// lib/server/db.ts
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { cache } from 'react';
+
+// Create a cached Supabase client for server components
+export const createServerClient = cache(() => {
+  return createServerComponentClient({ cookies });
+});
+
+// Competitors data access
+export async function getCompetitors(query = '') {
+  const supabase = createServerClient();
+  
+  const { data, error } = await supabase
+    .from('competitors')
+    .select('*')
+    .ilike('name', `%${query}%`)
+    .order('name');
+    
+  if (error) throw error;
+  return data;
+}
+
+export async function getCompetitorById(id: string) {
+  const supabase = createServerClient();
+  
+  const { data, error } = await supabase
+    .from('competitors')
+    .select(`
+      *,
+      products (*)
+    `)
+    .eq('id', id)
+    .single();
+    
+  if (error) throw error;
+  return data;
+}
+
+// Other data access functions...
+```
+
+### Client-Side Data Access
+
+```typescript
+// lib/client/db.ts
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/types/database.types';
+
+// Create a Supabase client for client components
+export const createClient = () => {
+  return createClientComponentClient<Database>();
+};
+
+// Custom hooks for data access
+export function useCompetitor(id: string) {
+  const [competitor, setCompetitor] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  useEffect(() => {
+    async function fetchCompetitor() {
+      try {
+        setLoading(true);
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('competitors')
+          .select(`
+            *,
+            products (*)
+          `)
+          .eq('id', id)
+          .single();
+          
+        if (error) throw error;
+        setCompetitor(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchCompetitor();
+  }, [id]);
+  
+  return { competitor, loading, error };
+}
+
+// Other hooks and functions...
+```
+
+## Error Handling
+
+A consistent approach to error handling is implemented across the backend:
+
+1. **API Routes Error Handling**
+   - Consistent error response format
+   - HTTP status codes are used appropriately
+   - Validation errors are returned with details
+
+2. **Database Error Handling**
+   - Supabase errors are properly captured and handled
+   - Transactions are used where appropriate to ensure data integrity
+
+3. **Logging**
+   - Server-side errors are logged for monitoring
+   - Critical errors trigger notifications via appropriate channels
+
+## API Documentation
+
+API routes are documented using JSDoc comments to provide clarity on usage:
+
+```typescript
+/**
+ * @route GET /api/competitors
+ * @description Get a list of competitors
+ * @query {string} query - Filter competitors by name
+ * @returns {Competitor[]} - Array of competitor objects
+ * @throws {401} - If user is not authenticated
+ * @throws {500} - If database query fails
+ */
+export async function GET(request: NextRequest) {
+  // Implementation...
+}
+```
+
+## Security Considerations
+
+1. **Input Validation**
+   - All user inputs are validated using Zod schemas
+   - Sanitization is applied where necessary
+
+2. **Authentication**
+   - All protected routes check for valid session
+   - JWT tokens are handled securely
+
+3. **Database Security**
+   - RLS policies ensure data isolation
+   - Service role is only used where absolutely necessary
+
+4. **CORS**
+   - Proper CORS headers are implemented
+   - Only necessary origins are allowed
+
+5. **Rate Limiting**
+   - API routes implement rate limiting where appropriate
+
+## Deployment
+
+The backend is deployed alongside the frontend through the Next.js application, with Supabase services managed separately:
+
+1. **Next.js Application**
+   - Deployed to Vercel
+   - Environment variables configured for production
+
+2. **Supabase Project**
+   - Database migrations managed through SQL files
+   - Edge Functions deployed via Supabase CLI
+
+## Testing
+
+Testing strategies for the backend include:
+
+1. **Unit Tests**
+   - Testing individual functions and utilities
+   - Mock Supabase client for database operations
+
+2. **Integration Tests**
+   - Testing API routes with test database
+   - End-to-end flow testing
+
+3. **E2E Tests**
+   - Cypress or Playwright for full application testing
+
+## Performance Considerations
+
+1. **Database Indexes**
+   - Appropriate indexes on frequently queried columns
+
+2. **Caching**
+   - Response caching for appropriate endpoints
+   - Leveraging Next.js caching mechanisms
+
+3. **Query Optimization**
+   - Efficient Supabase queries with proper selection
+   - Pagination for large datasets
+
+This document serves as a reference for understanding and maintaining the RivalRecon backend architecture. It outlines the structure, patterns, and best practices to ensure consistency and quality across the codebase.

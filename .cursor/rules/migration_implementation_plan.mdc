@@ -1,0 +1,974 @@
+# Migration Implementation Plan: Next.js, Shadcn UI, and Tailwind CSS
+
+This document outlines the step-by-step implementation plan for migrating the RivalRecon frontend from the current React and Chakra UI stack to Next.js, Shadcn UI, and Tailwind CSS.
+
+## Overview
+
+The migration will follow these phases:
+- [Phase 1](#phase-1-project-setup--foundation): Project Setup & Foundation
+- [Phase 2](#phase-2-authentication--core-layout): Authentication & Core Layout
+- [Phase 3](#phase-3-page-structure--routes): Page Structure & Routes
+- [Phase 4](#phase-4-components--features): Components & Features
+- [Phase 5](#phase-5-styling--refinement): Styling & Refinement
+- [Phase 6](#phase-6-testing--deployment): Testing & Deployment
+
+## Phase 1: Project Setup & Foundation
+
+### 1.1 Initialize Next.js Project
+
+```bash
+npx create-next-app@latest rival-recon-next --typescript --tailwind --eslint --app
+cd rival-recon-next
+```
+
+### 1.2 Install Shadcn UI and Dependencies
+
+```bash
+npx shadcn-ui@latest init
+```
+
+Configuration options:
+- Typography: Yes
+- Style: Default
+- Color: Slate
+- CSS variables: Yes
+- Global CSS: app/globals.css
+- CSS import: Yes
+- Import aliases: @/components, @/lib, etc.
+
+```bash
+# Install additional dependencies
+npm install zustand @supabase/auth-helpers-nextjs @supabase/supabase-js react-hook-form zod @hookform/resolvers react-icons date-fns
+```
+
+### 1.3 Configure Environment Variables
+
+Create `.env.local`:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+### 1.4 Setup Folder Structure
+
+```
+app/
+├── (auth)/
+│   ├── login/
+│   ├── register/
+│   └── reset-password/
+├── (dashboard)/
+│   ├── dashboard/
+│   ├── teams/
+│   ├── competitors/
+│   └── profile/
+├── api/
+components/
+├── ui/           # Shadcn components
+├── layout/       # Layout components
+├── competitor/   # Feature components
+├── auth/         # Auth components
+├── dashboard/    # Dashboard components
+lib/
+├── supabase.ts   # Supabase client
+├── utils.ts      # Utility functions
+├── hooks/        # Custom hooks
+├── types/        # Type definitions
+└── store/        # Zustand stores
+```
+
+## Phase 2: Authentication & Core Layout
+
+### 2.1 Setup Supabase Client and Auth Helpers
+
+Create `lib/supabase.ts`:
+
+```typescript
+import { createBrowserClient } from '@supabase/ssr'
+
+export const createClient = () => {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
+```
+
+### 2.2 Implement Authentication Components
+
+Create login form using Shadcn components:
+
+```typescript
+// components/auth/login-form.tsx
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState } from "react"
+import { createClient } from "@/lib/supabase"
+
+export function LoginForm() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    
+    const supabase = createClient()
+    
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    })
+    
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+      return
+    }
+    
+    // Redirect handled by middleware
+  }
+  
+  return (
+    <Card className="w-full max-w-md">
+      <CardHeader>
+        <CardTitle>Login</CardTitle>
+        <CardDescription>Enter your credentials to access your account</CardDescription>
+      </CardHeader>
+      <form onSubmit={handleLogin}>
+        <CardContent className="space-y-4">
+          {error && (
+            <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
+              {error}
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input 
+              id="email" 
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input 
+              id="password" 
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
+          </Button>
+        </CardFooter>
+      </form>
+    </Card>
+  )
+}
+```
+
+### 2.3 Create Auth Middleware
+
+Create `middleware.ts` in the root:
+
+```typescript
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next()
+  const supabase = createMiddlewareClient({ req, res })
+  
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  // Auth routes
+  if (req.nextUrl.pathname.startsWith('/login') || 
+      req.nextUrl.pathname.startsWith('/register') || 
+      req.nextUrl.pathname.startsWith('/reset-password')) {
+    if (session) {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+    return res
+  }
+
+  // Protected routes
+  if (req.nextUrl.pathname.startsWith('/dashboard') || 
+      req.nextUrl.pathname.startsWith('/teams') || 
+      req.nextUrl.pathname.startsWith('/competitors') || 
+      req.nextUrl.pathname.startsWith('/profile')) {
+    if (!session) {
+      return NextResponse.redirect(new URL('/login', req.url))
+    }
+    return res
+  }
+
+  return res
+}
+
+export const config = {
+  matcher: [
+    '/login/:path*', 
+    '/register/:path*', 
+    '/reset-password/:path*',
+    '/dashboard/:path*',
+    '/teams/:path*',
+    '/competitors/:path*',
+    '/profile/:path*',
+  ],
+}
+```
+
+### 2.4 Implement Core Layout Components
+
+Create `components/layout/sidebar.tsx`:
+
+```typescript
+"use client"
+
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { useState } from "react"
+import { MenuIcon } from "lucide-react"
+
+interface SidebarProps {
+  items: {
+    title: string
+    href: string
+    icon: React.ComponentType<{ className?: string }>
+  }[]
+}
+
+export function Sidebar({ items }: SidebarProps) {
+  const pathname = usePathname()
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      {/* Mobile sidebar */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+          >
+            <MenuIcon className="h-6 w-6" />
+            <span className="sr-only">Toggle Menu</span>
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="pr-0">
+          <MobileNav items={items} pathname={pathname} setOpen={setOpen} />
+        </SheetContent>
+      </Sheet>
+      
+      {/* Desktop sidebar */}
+      <div className="hidden border-r bg-background md:block">
+        <div className="h-[calc(100vh-3.5rem)] min-w-52">
+          <DesktopNav items={items} pathname={pathname} />
+        </div>
+      </div>
+    </>
+  )
+}
+
+function MobileNav({ 
+  items, 
+  pathname, 
+  setOpen 
+}: { 
+  items: SidebarProps["items"]
+  pathname: string
+  setOpen: (open: boolean) => void
+}) {
+  return (
+    <div className="flex flex-col space-y-4 py-4">
+      <ScrollArea className="h-[calc(100vh-8rem)]">
+        <div className="flex flex-col space-y-1 px-4">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setOpen(false)}
+            >
+              <Button
+                variant={pathname === item.href ? "secondary" : "ghost"}
+                className="w-full justify-start"
+              >
+                <item.icon className="mr-2 h-5 w-5" />
+                {item.title}
+              </Button>
+            </Link>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  )
+}
+
+function DesktopNav({ 
+  items, 
+  pathname 
+}: { 
+  items: SidebarProps["items"]
+  pathname: string
+}) {
+  return (
+    <ScrollArea className="h-full py-6">
+      <div className="flex flex-col space-y-1 px-4">
+        {items.map((item) => (
+          <Link key={item.href} href={item.href}>
+            <Button
+              variant={pathname === item.href ? "secondary" : "ghost"}
+              className="w-full justify-start"
+            >
+              <item.icon className="mr-2 h-5 w-5" />
+              {item.title}
+            </Button>
+          </Link>
+        ))}
+      </div>
+    </ScrollArea>
+  )
+}
+```
+
+## Phase 3: Page Structure & Routes
+
+### 3.1 Create Base Layouts
+
+For `app/layout.tsx`:
+
+```typescript
+import { Metadata } from "next"
+import { Inter } from "next/font/google"
+import "./globals.css"
+
+const inter = Inter({ subsets: ["latin"] })
+
+export const metadata: Metadata = {
+  title: "Rival Recon",
+  description: "Competitive intelligence platform",
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <main>{children}</main>
+      </body>
+    </html>
+  )
+}
+```
+
+For `app/(dashboard)/layout.tsx`:
+
+```typescript
+import { Sidebar } from "@/components/layout/sidebar"
+import { Header } from "@/components/layout/header"
+import {
+  LayoutDashboardIcon,
+  UsersIcon,
+  UserIcon,
+  BuildingIcon,
+} from "lucide-react"
+
+const sidebarItems = [
+  {
+    title: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboardIcon,
+  },
+  {
+    title: "Competitors",
+    href: "/competitors",
+    icon: BuildingIcon,
+  },
+  {
+    title: "Teams",
+    href: "/teams",
+    icon: UsersIcon,
+  },
+  {
+    title: "Profile",
+    href: "/profile",
+    icon: UserIcon,
+  },
+]
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex h-screen flex-col">
+      <Header />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar items={sidebarItems} />
+        <div className="flex-1 overflow-y-auto p-6">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+### 3.2 Implement Main Pages
+
+For `app/(dashboard)/dashboard/page.tsx`:
+
+```typescript
+import { DashboardHeader } from "@/components/dashboard/dashboard-header"
+import { DashboardCards } from "@/components/dashboard/dashboard-cards"
+import { CompetitorsList } from "@/components/competitor/competitors-list"
+
+export default function DashboardPage() {
+  return (
+    <div className="space-y-6">
+      <DashboardHeader />
+      <DashboardCards />
+      <CompetitorsList />
+    </div>
+  )
+}
+```
+
+## Phase 4: Components & Features
+
+### 4.1 Create Zustand Store for State Management
+
+Create `lib/store/competitors-store.ts`:
+
+```typescript
+import { create } from 'zustand'
+import { createClient } from '@/lib/supabase'
+
+interface Competitor {
+  id: string
+  name: string
+  website: string
+  description: string
+  created_at: string
+}
+
+interface CompetitorsState {
+  competitors: Competitor[]
+  loading: boolean
+  error: string | null
+  fetchCompetitors: () => Promise<void>
+  addCompetitor: (competitor: Omit<Competitor, 'id' | 'created_at'>) => Promise<void>
+  updateCompetitor: (id: string, updates: Partial<Omit<Competitor, 'id' | 'created_at'>>) => Promise<void>
+  deleteCompetitor: (id: string) => Promise<void>
+}
+
+export const useCompetitorsStore = create<CompetitorsState>((set, get) => ({
+  competitors: [],
+  loading: false,
+  error: null,
+  
+  fetchCompetitors: async () => {
+    set({ loading: true, error: null })
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('competitors')
+        .select('*')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      
+      set({ competitors: data, loading: false })
+    } catch (error: any) {
+      set({ error: error.message, loading: false })
+    }
+  },
+  
+  addCompetitor: async (competitor) => {
+    set({ loading: true, error: null })
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('competitors')
+        .insert([competitor])
+        .select()
+      
+      if (error) throw error
+      
+      set(state => ({ 
+        competitors: [data[0], ...state.competitors],
+        loading: false 
+      }))
+    } catch (error: any) {
+      set({ error: error.message, loading: false })
+    }
+  },
+  
+  updateCompetitor: async (id, updates) => {
+    set({ loading: true, error: null })
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('competitors')
+        .update(updates)
+        .eq('id', id)
+        .select()
+      
+      if (error) throw error
+      
+      set(state => ({
+        competitors: state.competitors.map(c => 
+          c.id === id ? { ...c, ...data[0] } : c
+        ),
+        loading: false
+      }))
+    } catch (error: any) {
+      set({ error: error.message, loading: false })
+    }
+  },
+  
+  deleteCompetitor: async (id) => {
+    set({ loading: true, error: null })
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('competitors')
+        .delete()
+        .eq('id', id)
+      
+      if (error) throw error
+      
+      set(state => ({
+        competitors: state.competitors.filter(c => c.id !== id),
+        loading: false
+      }))
+    } catch (error: any) {
+      set({ error: error.message, loading: false })
+    }
+  }
+}))
+```
+
+### 4.2 Implement Core Feature Components
+
+Create `components/competitor/competitors-list.tsx`:
+
+```typescript
+"use client"
+
+import { useEffect } from "react"
+import { useCompetitorsStore } from "@/lib/store/competitors-store"
+import { 
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { 
+  MoreHorizontalIcon, 
+  PencilIcon, 
+  TrashIcon, 
+  PlusIcon 
+} from "lucide-react"
+import { CompetitorDialog } from "@/components/competitor/competitor-dialog"
+import { useState } from "react"
+
+export function CompetitorsList() {
+  const { competitors, loading, error, fetchCompetitors, deleteCompetitor } = useCompetitorsStore()
+  const [open, setOpen] = useState(false)
+  const [selectedCompetitor, setSelectedCompetitor] = useState<any>(null)
+  
+  useEffect(() => {
+    fetchCompetitors()
+  }, [fetchCompetitors])
+  
+  const handleEdit = (competitor: any) => {
+    setSelectedCompetitor(competitor)
+    setOpen(true)
+  }
+  
+  const handleAdd = () => {
+    setSelectedCompetitor(null)
+    setOpen(true)
+  }
+  
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Competitors</CardTitle>
+          <CardDescription>
+            Manage your tracked competitors
+          </CardDescription>
+        </div>
+        <Button onClick={handleAdd} size="sm">
+          <PlusIcon className="mr-2 h-4 w-4" />
+          Add Competitor
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {loading && <p>Loading...</p>}
+        {error && <p className="text-destructive">{error}</p>}
+        {!loading && !error && (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Website</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="w-[100px]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {competitors.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center">
+                    No competitors found. Add one to get started.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                competitors.map((competitor) => (
+                  <TableRow key={competitor.id}>
+                    <TableCell>{competitor.name}</TableCell>
+                    <TableCell>
+                      <a 
+                        href={competitor.website} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        {competitor.website}
+                      </a>
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {competitor.description}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontalIcon className="h-4 w-4" />
+                            <span className="sr-only">Actions</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEdit(competitor)}>
+                            <PencilIcon className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => deleteCompetitor(competitor.id)}
+                            className="text-destructive"
+                          >
+                            <TrashIcon className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+      <CompetitorDialog 
+        open={open} 
+        onOpenChange={setOpen} 
+        competitor={selectedCompetitor} 
+      />
+    </Card>
+  )
+}
+```
+
+## Phase 5: Styling & Refinement
+
+### 5.1 Global Styles and Theme Configuration
+
+Customize `app/globals.css`:
+
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+ 
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+ 
+    --radius: 0.5rem;
+  }
+ 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+ 
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+```
+
+### 5.2 Implement Theme Toggle
+
+Create `components/layout/theme-toggle.tsx`:
+
+```typescript
+"use client"
+
+import * as React from "react"
+import { MoonIcon, SunIcon } from "lucide-react"
+import { useTheme } from "next-themes"
+
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+
+export function ThemeToggle() {
+  const { setTheme } = useTheme()
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <SunIcon className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+          <MoonIcon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setTheme("light")}>
+          Light
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>
+          Dark
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")}>
+          System
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+```
+
+## Phase 6: Testing & Deployment
+
+### 6.1 Setup Testing with Jest and React Testing Library
+
+```bash
+npm install -D jest @testing-library/react @testing-library/jest-dom jest-environment-jsdom
+```
+
+Create `jest.config.js`:
+
+```javascript
+const nextJest = require('next/jest')
+ 
+const createJestConfig = nextJest({
+  dir: './',
+})
+ 
+const customJestConfig = {
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  testEnvironment: 'jest-environment-jsdom',
+}
+ 
+module.exports = createJestConfig(customJestConfig)
+```
+
+Create `jest.setup.js`:
+
+```javascript
+import '@testing-library/jest-dom'
+```
+
+### 6.2 Prepare for Deployment
+
+Create a `.github/workflows/deploy.yml` file for CI/CD:
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run tests
+      run: npm test
+      
+    - name: Build
+      run: npm run build
+      
+    - name: Deploy to Vercel
+      uses: amondnet/vercel-action@v20
+      with:
+        vercel-token: ${{ secrets.VERCEL_TOKEN }}
+        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+        vercel-args: '--prod'
+```
+
+### 6.3 Deployment Checklist
+
+Before deploying to production:
+
+- [ ] Add all environment variables to deployment platform
+- [ ] Ensure all API routes are secured properly
+- [ ] Run build process to check for errors
+- [ ] Verify authentication flows work correctly
+- [ ] Test responsive design across devices
+- [ ] Audit for accessibility compliance
+- [ ] Optimize images and assets
+- [ ] Set up proper error monitoring
+
+## Migration Strategies
+
+### Component Migration Strategy
+
+1. Start with core layout components (Sidebar, Header)
+2. Move to authentication components
+3. Migrate shared UI components 
+4. Implement feature-specific components
+5. Refactor and optimize as needed
+
+### State Management Migration Strategy
+
+1. Convert Context API to Zustand stores
+2. Migrate data fetching logic to React Query or SWR
+3. Implement optimistic updates for better UX
+4. Add proper error handling and loading states
+
+### CSS Migration Strategy
+
+1. Convert Chakra UI styles to Tailwind utility classes
+2. Extract common patterns into component classes
+3. Implement dark mode support
+4. Ensure consistent spacing and typography
+
+## Conclusion
+
+This implementation plan provides a structured approach to migrating from the current React/Chakra UI stack to Next.js, Shadcn UI, and Tailwind CSS. By following these steps, the migration can be completed systematically, ensuring that all features are properly implemented in the new tech stack while maintaining the existing functionality. 

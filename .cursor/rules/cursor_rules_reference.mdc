@@ -1,0 +1,78 @@
+# Cursor Rules Reference Guide
+
+This document serves as a comprehensive reference for all rule files in the `.cursor/rules` folder. It explains when each rule should be referenced and its high-level purpose to help the AI understand when to consult specific rule files throughout development.
+
+## Overview of Rules
+
+The rules in this project provide guidance for different aspects of the application's architecture, development practices, and migration plans. These rules should be referenced when making changes or additions to their respective areas.
+
+## Core Rules
+
+### 1. Migration Implementation Plan
+- **File**: `migration_implementation_plan.mdc`
+- **Purpose**: Provides a detailed, step-by-step plan for migrating from React/Chakra UI to Next.js, Shadcn UI, and Tailwind CSS.
+- **When to Reference**: When planning or implementing any part of the frontend migration, including project setup, component creation, and feature implementation in the new tech stack.
+- **Contents**: Outlines phases from project initialization through deployment, including code snippets for critical setup.
+
+### 2. Tech Stack Document
+- **File**: `tech_stack_document.mdc`
+- **Purpose**: Defines the current and target technology stack for the application, including libraries, frameworks, and tools.
+- **When to Reference**: When making architectural decisions, adding new dependencies, or ensuring consistency with the established tech stack.
+- **Contents**: Details current React/Chakra UI stack and target Next.js/Shadcn/Tailwind stack with rationale for technology choices.
+
+## Architecture Rules
+
+### 3. Frontend Guidelines Document
+- **File**: `frontend_guidelines_document.mdc`
+- **Purpose**: Establishes standards for frontend development, component structure, and state management.
+- **When to Reference**: When creating or modifying frontend components, implementing state management, or handling UI logic.
+- **Contents**: Standards for component organization, naming conventions, styling approaches, and state management practices.
+
+### 4. Backend Structure Document
+- **File**: `backend_structure_document.mdc`
+- **Purpose**: Outlines the backend architecture, API design principles, and data models.
+- **When to Reference**: When working with backend services, implementing API endpoints, or modifying database schemas.
+- **Contents**: Details on API structure, middleware, database models, and service organization.
+
+### 5. App Flowchart
+- **File**: `app_flowchart.mdc`
+- **Purpose**: Visualizes the application's core workflows and interaction between components.
+- **When to Reference**: When understanding how different parts of the application interconnect or when modifying application flows.
+- **Contents**: Descriptions of user journeys, component interactions, and data flow throughout the application.
+
+## Security and Authentication
+
+### 6. Security Guideline Document
+- **File**: `security_guideline_document.mdc`
+- **Purpose**: Provides security best practices and requirements for the application.
+- **When to Reference**: When implementing authentication, handling sensitive data, or making changes that might impact security.
+- **Contents**: Guidelines for input validation, authentication practices, data protection, and security testing.
+
+### 7. Supabase Authentication
+- **File**: `supabase_authentication.mdc`
+- **Purpose**: Specifies how to implement authentication using Supabase in both current and target tech stacks.
+- **When to Reference**: When working on user authentication, session management, or protected routes.
+- **Contents**: Implementation details for auth flows, session handling, and security considerations specific to Supabase.
+
+## Best Practices
+
+### 8. Cursor Project Rules
+- **File**: `cursor_project_rules.mdc`
+- **Purpose**: General best practices and guidelines for the entire project.
+- **When to Reference**: For general guidance on code style, documentation, and development workflow not covered by specific rules.
+- **Contents**: Project-wide conventions, git workflow, code review standards, and general best practices.
+
+## How to Use These Rules
+
+When making changes to the codebase, follow these steps to determine which rules to reference:
+
+1. **Identify the scope** of your task (frontend, backend, authentication, etc.)
+2. **Consult the relevant rule files** based on that scope
+3. **Apply the guidelines** from those rules to ensure consistency
+4. **Reference multiple rules** when tasks span different areas of concern
+
+The AI should proactively fetch and apply these rules when assisting with development tasks to ensure all work aligns with project standards and migration goals.
+
+---
+
+This reference guide helps maintain consistency across the application by providing clear guidance on when to apply specific rules. The AI should use this document to determine which specialized rule documents to reference for each development task. 
