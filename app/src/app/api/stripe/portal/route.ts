@@ -1,46 +1,19 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import Stripe from 'stripe';
 import { cookies } from 'next/headers';
+import stripe, { isStripeConfigured } from '@/lib/stripe-server';
+import env from '@/lib/env-config';
 
 export async function POST(request: Request) {
   try {
-    // Verify Stripe is configured
-    console.log('Available environment variables:', Object.keys(process.env).filter(key => key.includes('STRIPE')));
-    
-    // Find the correct Stripe API key regardless of naming convention
-    function findStripeKey() {
-      // Check for the specific naming convention in your .env file
-      if (process.env.Stripe_API_Key) {
-        console.log('Found Stripe_API_Key with your naming convention');
-        return process.env.Stripe_API_Key;
-      }
-      
-      // Fall back to other common naming conventions
-      const key = process.env.STRIPE_SECRET_KEY || 
-                process.env.STRIPE_API_KEY || 
-                process.env.NEXT_PUBLIC_STRIPE_SECRET_KEY;
-                
-      if (key) console.log('Found Stripe key with alternate naming');
-      return key;
-    }
-    
-    const stripeKey = findStripeKey();
-    
-    if (!stripeKey) {
-      console.error('Missing Stripe secret key - checked multiple environment variable names');
+    // Verify Stripe is properly configured using our central configuration
+    if (!isStripeConfigured()) {
+      console.error('Stripe is not properly configured. Check environment variables.');
       return NextResponse.json(
-        { error: 'Stripe is not properly configured' },
+        { error: 'Stripe payment processing is not available' },
         { status: 500 }
       );
     }
-    
-    // Initialize Stripe directly here to ensure we have a valid instance
-    console.log('Using Stripe key:', stripeKey ? '✓ Found' : '✗ Not found');
-    
-    const stripe = new Stripe(stripeKey, {
-      apiVersion: '2025-04-30.basil' as any, // Use the correct API version
-    });
     
     // Get Supabase client
     const supabase = await createClient();

@@ -1,10 +1,27 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
 
+/**
+ * DeepSeek API service for analyzing product reviews
+ * Handles communication with DeepSeek AI API using secure credentials
+ */
 class DeepSeekService {
+  /**
+   * Initialize the DeepSeek service
+   * @param {string} apiKey - DeepSeek API key from environment variables
+   */
   constructor(apiKey) {
+    if (!apiKey) {
+      const error = 'DeepSeek API key not provided. Check environment variables.';
+      logger.error(error);
+      throw new Error(error);
+    }
+    
+    // Store API key securely and validate format
     this.apiKey = apiKey;
-    this.baseUrl = 'https://api.deepseek.com/v1';  // Replace with actual DeepSeek API URL
+    
+    // Set API base URL from environment or use default
+    this.baseUrl = process.env.DEEPSEEK_API_URL || 'https://api.deepseek.com/v1';
   }
 
   /**

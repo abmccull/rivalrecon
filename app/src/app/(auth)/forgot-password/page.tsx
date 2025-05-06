@@ -2,12 +2,14 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import ReCaptcha from "@/components/auth/ReCaptcha";
 import Link from "next/link";
 
 const schema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
+  recaptchaToken: z.string().min(1, { message: "Please complete the reCAPTCHA verification" }),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -15,18 +17,33 @@ type FormData = z.infer<typeof schema>;
 export default function ForgotPasswordPage() {
   const [isEmailSent, setIsEmailSent] = useState(false);
   const [error, setError] = useState("");
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
   
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+  
+  // Update reCAPTCHA token in the form when it changes
+  useEffect(() => {
+    if (recaptchaToken) {
+      setValue('recaptchaToken', recaptchaToken);
+    }
+  }, [recaptchaToken, setValue]);
 
   const onSubmit = async (data: FormData) => {
     setError("");
     const supabase = createClient();
     
+    // Verify reCAPTCHA token is present
+    if (!recaptchaToken) {
+      setError("Please complete the reCAPTCHA verification");
+      return;
+    }
+    
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
         redirectTo: `${window.location.origin}/reset-password`,
+        captchaToken: data.recaptchaToken,
       });
       
       if (error) {
@@ -48,7 +65,7 @@ export default function ForgotPasswordPage() {
         {!isEmailSent ? (
           <>
             <p className="text-gray-600 text-center mb-6">
-              Enter your email address and we'll send you a link to reset your password.
+              Enter your email address and we&apos;ll send you a link to reset your password.
             </p>
             
             {error && (
@@ -71,6 +88,18 @@ export default function ForgotPasswordPage() {
                 )}
               </div>
               
+              {/* ReCAPTCHA Component */}
+              <div className="mb-4">
+                <ReCaptcha 
+                  onChange={setRecaptchaToken}
+                  onExpired={() => setRecaptchaToken(null)}
+                  className="flex justify-center"
+                />
+                {errors.recaptchaToken && (
+                  <p className="mt-1 text-xs text-red-500">{errors.recaptchaToken.message}</p>
+                )}
+              </div>
+              
               <button
                 type="submit"
                 className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 transition"
@@ -86,7 +115,7 @@ export default function ForgotPasswordPage() {
               Reset link sent! Please check your email.
             </div>
             <p className="text-gray-600 mb-4">
-              If you don't see the email, check your spam folder or try again.
+              If you don&apos;t see the email, check your spam folder or try again.
             </p>
           </div>
         )}

@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { getRecentSubmissions } from '@/lib/dashboard';
 import { redirect } from 'next/navigation';
-import FullAnalysisTable from '@/components/reports/FullAnalysisTable';
 import DashboardHeader from '@/components/layout/DashboardHeader';
+import ReportsContent from '@/components/reports/ReportsContent';
 
 export default async function ReportsPage() {
   // Get Supabase client
@@ -15,7 +15,10 @@ export default async function ReportsPage() {
   }
   
   // Fetch all submissions from Supabase
-  const submissions = await getRecentSubmissions(supabase, 100); // Get up to 100 submissions
+  const submissionsResponse = await getRecentSubmissions(100); // Get up to 100 submissions
+  
+  // Ensure submissions is always an array
+  const submissions = Array.isArray(submissionsResponse) ? submissionsResponse : [];
   
   return (
     <div className="bg-[#F7FAFC] min-h-screen">
@@ -28,9 +31,8 @@ export default async function ReportsPage() {
             <p className="text-gray-600 mt-2">View and manage all your product analyses</p>
           </div>
           
-          <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            <FullAnalysisTable submissions={submissions} />
-          </div>
+          {/* Wrap reports list in subscription guard */}
+          <ReportsContent submissions={submissions} />
         </div>
       </main>
 

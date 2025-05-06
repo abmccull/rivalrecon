@@ -33,15 +33,9 @@ export function SubscriptionManagement() {
     'scale': 'Scale'
   };
   
-  // For debugging
+  // State tracking for subscription changes
   useEffect(() => {
-    console.log("Subscription state:", {
-      subscription,
-      usageInfo,
-      isLoading,
-      planName,
-      isActive: isSubscriptionActive()
-    });
+    // Debug logs removed for production
   }, [subscription, usageInfo, isLoading, planName, isSubscriptionActive]);
   
   // Fetch plan name when subscription data changes
@@ -102,13 +96,25 @@ export function SubscriptionManagement() {
     }
   };
 
-  const formatDate = (dateString: string | null) => {
+  const formatDate = (dateString: string | Date | null) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    
+    try {
+      const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'N/A';
+      }
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    } catch (err) {
+      return 'N/A';
+    }
   };
 
   const getStatusIndicator = () => {
@@ -117,50 +123,65 @@ export function SubscriptionManagement() {
     switch (subscription.status) {
       case 'active':
         return (
-          <div className="flex items-center text-green-600">
-            <CheckCircle2 className="w-5 h-5 mr-2" />
+          <div className="px-3 py-1 rounded-full bg-green-50 text-green-600 flex items-center gap-1 font-medium">
+            <CheckCircle2 className="w-4 h-4" />
             <span>Active</span>
           </div>
         );
       case 'trialing':
         return (
-          <div className="flex items-center text-blue-600">
-            <CheckCircle2 className="w-5 h-5 mr-2" />
-            <span>Trial Active</span>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 flex items-center gap-1 font-medium">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Trial</span>
+            </div>
+            {subscription.trialEndsAt && (
+              <div className="px-3 py-1 rounded-full bg-amber-50 text-amber-600 flex items-center gap-1 text-xs font-medium">
+                <span>Trial ends {formatDate(subscription.trialEndsAt ? subscription.trialEndsAt.toISOString() : null)}</span>
+              </div>
+            )}
           </div>
         );
       case 'past_due':
         return (
-          <div className="flex items-center text-amber-600">
-            <AlertTriangle className="w-5 h-5 mr-2" />
+          <div className="px-3 py-1 rounded-full bg-orange-50 text-orange-600 flex items-center gap-1 font-medium">
+            <AlertTriangle className="w-4 h-4" />
             <span>Past Due</span>
           </div>
         );
       case 'canceled':
         return (
-          <div className="flex items-center text-red-600">
-            <AlertCircle className="w-5 h-5 mr-2" />
+          <div className="px-3 py-1 rounded-full bg-red-50 text-red-600 flex items-center gap-1 font-medium">
+            <AlertCircle className="w-4 h-4" />
             <span>Canceled</span>
           </div>
         );
       default:
-        return (
-          <div className="flex items-center text-gray-600">
-            <span>{subscription.status}</span>
-          </div>
-        );
+        return null;
     }
   };
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6 space-y-4">
-        <h2 className="text-xl font-bold text-[#1F2937]">Subscription Management</h2>
-        <p className="text-sm text-gray-500">Loading subscription information...</p>
-        <div className="space-y-4">
-          <Skeleton className="h-4 w-[200px]" />
-          <Skeleton className="h-4 w-[300px]" />
-          <Skeleton className="h-4 w-[250px]" />
+      <div className="px-4 py-5 sm:p-6 bg-white shadow rounded-lg animate-pulse">
+        <div className="mb-6">
+          <div className="h-8 bg-gray-200 rounded w-1/2 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div>
+            <div className="h-5 bg-gray-200 rounded w-1/3 mb-2"></div>
+            <div className="h-7 bg-gray-200 rounded w-1/2"></div>
+          </div>
+          <div>
+            <div className="h-5 bg-gray-200 rounded w-1/3 mb-2"></div>
+            <div className="h-7 bg-gray-200 rounded w-1/2"></div>
+          </div>
+        </div>
+        
+        <div className="border-t border-gray-200 pt-6 mt-6">
+          <div className="h-10 bg-gray-200 rounded w-1/3"></div>
         </div>
       </div>
     );
@@ -229,15 +250,23 @@ export function SubscriptionManagement() {
   const isUnlimited = usageLimit === 0 || usageLimit === null;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-start">
+    <div className="w-full max-w-4xl mx-auto">
+      <Card className="border-gray-200 shadow-sm">
+        <CardHeader className="space-y-1 pb-6">
+          <div className="flex justify-between items-center">
             <div>
-              <CardTitle>Your Subscription</CardTitle>
+              <CardTitle className="text-2xl">Your Subscription</CardTitle>
               <CardDescription>Manage your subscription plan</CardDescription>
             </div>
-            {getStatusIndicator()}
+            {/* Status indicator in the top right */}
+            {subscription.status === 'trialing' ? (
+              <div className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 flex items-center gap-1 font-medium">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Trial</span>
+              </div>
+            ) : (
+              getStatusIndicator()
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -251,23 +280,48 @@ export function SubscriptionManagement() {
               <p className="font-medium capitalize">{subscription.status}</p>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-gray-500">Current Period Ends</h3>
-              <p className="mt-1 text-lg font-semibold">
-                {subscription.currentPeriodEnd && isValidDate(subscription.currentPeriodEnd)
-                  ? new Date(subscription.currentPeriodEnd).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })
-                  : subscription.status === 'trialing' ? 'After trial period ends' : 'N/A'}
+              <h3 className="text-sm font-medium text-gray-500">
+                {subscription.status === 'trialing' ? 'Trial Period Ends' : 'Current Period Ends'}
+              </h3>
+              <p className={`mt-1 text-lg font-semibold ${subscription.status === 'trialing' && subscription.trialEndsAt && new Date(subscription.trialEndsAt) < new Date() ? 'text-red-600' : ''}`}>
+                {subscription.status === 'trialing'
+                  ? (() => {
+                      // Use direct date handling for trialing status
+                      if (!subscription.trialEndsAt) {
+                        return 'N/A';
+                      }
+                      
+                      try {
+                        const trialEndDate = new Date(subscription.trialEndsAt);
+                        const now = new Date();
+                        
+                        // Check if date is valid
+                        if (isNaN(trialEndDate.getTime())) {
+                          return 'N/A';
+                        }
+                        
+                        const isExpired = trialEndDate < now;
+                        
+                        return isExpired 
+                          ? `Expired on ${formatDate(trialEndDate)}` 
+                          : formatDate(trialEndDate);
+                      } catch (err) {
+                        return 'N/A';
+                      }
+                    })()
+                  : subscription.currentPeriodEnd && isValidDate(subscription.currentPeriodEnd)
+                    ? formatDate(subscription.currentPeriodEnd)
+                    : 'N/A'}
               </p>
+              
+              {/* Show expired trial warning */}
+              {subscription.status === 'trialing' && subscription.trialEndsAt && new Date(subscription.trialEndsAt) < new Date() && (
+                <div className="mt-1 text-sm px-2 py-1 bg-red-50 border border-red-200 rounded text-red-700">
+                  Your trial has expired. Please upgrade to continue using all features.
+                </div>
+              )}
             </div>
-            {subscription.trialEndsAt && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-500">Trial Ends</h4>
-                <p className="font-medium">{formatDate(subscription.trialEndsAt ? subscription.trialEndsAt.toISOString() : null)}</p>
-              </div>
-            )}
+            {/* We've moved the trial end date to the Current Period Ends section above */}
           </div>
 
           {/* Monthly Usage Counter - Styled like the dashboard component */}
@@ -311,38 +365,24 @@ export function SubscriptionManagement() {
                   analyses used
                 </span>
                 <span className="text-muted-foreground text-xs">
-                  {isUnlimited ? 'No monthly limit' : `Resets: ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'Next billing cycle'}`}
+                  {isUnlimited ? 'No monthly limit' : (
+                    subscription.status === 'trialing' && subscription.trialEndsAt
+                      ? `Resets: ${new Date(subscription.trialEndsAt).toLocaleDateString()}`
+                      : `Resets: ${subscription.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : 'Next billing cycle'}`
+                  )}
                 </span>
               </div>
             </div>
           </div>
         </CardContent>
-        <CardFooter className="flex justify-between">
-          {isSubscriptionActive() ? (
-            <Button
-              onClick={handleManageSubscription}
-              disabled={isRedirecting}
-              className="bg-[#2DD4BF] hover:bg-[#0D9488]"
-            >
-              {isRedirecting ? 'Redirecting...' : 'Manage Subscription'}
-            </Button>
-          ) : (
-            <div className="space-x-4">
-              <Button
-                onClick={() => window.location.href = '/pricing'}
-                className="bg-[#2DD4BF] hover:bg-[#0D9488]"
-              >
-                Purchase Plan
-              </Button>
-              <Button
-                onClick={handleManageSubscription}
-                disabled={isRedirecting}
-                variant="outline"
-              >
-                Check Existing Subscriptions
-              </Button>
-            </div>
-          )}
+        <CardFooter>
+          <Button
+            onClick={handleManageSubscription}
+            disabled={isRedirecting}
+            className="bg-[#2DD4BF] hover:bg-[#0D9488]"
+          >
+            {isRedirecting ? 'Redirecting...' : 'Manage Subscription'}
+          </Button>
         </CardFooter>
       </Card>
     </div>

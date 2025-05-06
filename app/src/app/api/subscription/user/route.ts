@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
+import { createClient } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 
 // Helper function to create admin client
 async function createAdminClient() {
   const cookieStore = cookies();
   const supabase = await createClient();
   
-  // Log for debugging
-  console.log('Admin client created successfully');
+  // Admin client creation
+  logger.debug('Admin client created for subscription data access');
   
   return supabase;
 }
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
     }
     
     // Log subscription data for debugging
-    console.log('Subscription data:', JSON.stringify(subscription, null, 2));
+    // Process and normalize subscription data
     
     if (!subscription) {
       // No subscription found
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
     
     // Get current month's usage
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    console.log('Fetching usage for month:', currentMonth);
+    // Calculate current month's usage metrics
     
     // First check if there's a specific usage_tracking entry
     const { data: usage, error: usageError } = await supabase
@@ -95,14 +96,14 @@ export async function GET(request: Request) {
       .eq('user_id', userId);
       
     if (!countError && actualSubmissionCount !== null) {
-      console.log('Actual submission count from database:', actualSubmissionCount);
+      // Use the database count for accurate usage metrics
       // Use the higher of the two counts to ensure we're showing the correct number
       submissionsUsed = Math.max(Number(submissionsUsed), actualSubmissionCount);
     } else if (countError) {
       console.error('Error getting submission count:', countError);
     }
     
-    console.log('Final submissions used value:', submissionsUsed);
+    // Usage calculation finalized
     
     // Process the current_period_end to ensure it's properly formatted
     let formattedSubscription = { ...subscription };
@@ -133,7 +134,7 @@ export async function GET(request: Request) {
       }
     });
   } catch (error) {
-    console.error('Error retrieving subscription data:', error);
+    logger.error('Error retrieving subscription data:', error);
     return NextResponse.json(
       { error: 'An unexpected error occurred' },
       { status: 500 }

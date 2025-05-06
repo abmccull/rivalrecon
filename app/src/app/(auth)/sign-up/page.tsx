@@ -3,8 +3,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import ReCaptcha from "@/components/auth/ReCaptcha";
 import Link from "next/link";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { 
@@ -32,7 +33,8 @@ const schema = z.object({
     .regex(/[^A-Za-z0-9]/, { message: "Password must contain at least 1 special character" }),
   terms: z.boolean().refine(val => val === true, {
     message: "You must agree to the Terms of Service and Privacy Policy"
-  })
+  }),
+  recaptchaToken: z.string().min(1, { message: "Please complete the reCAPTCHA verification" })
 });
 
 type FormData = z.infer<typeof schema>;
@@ -53,22 +55,45 @@ export default function SignUpPage() {
   const [success, setSuccess] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
   
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       terms: false
     }
   });
+  
+  // Update reCAPTCHA token in the form when it changes
+  useEffect(() => {
+    if (recaptchaToken) {
+      setValue('recaptchaToken', recaptchaToken);
+    }
+  }, [recaptchaToken, setValue]);
 
   const onSubmit = async (data: FormData) => {
     setError("");
     setAuthLoading(true);
+    
+    // Verify reCAPTCHA token is present
+    if (!recaptchaToken) {
+      setError("Please complete the reCAPTCHA verification");
+      setAuthLoading(false);
+      return;
+    }
+    
     try {
       const supabase = createClient();
       const { error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
+        options: {
+          captchaToken: data.recaptchaToken,
+          data: {
+            full_name: data.fullname,
+            company: data.company
+          }
+        }
       });
       if (signUpError) {
         setError(getFriendlyErrorMessage(signUpError.message));
@@ -185,6 +210,18 @@ export default function SignUpPage() {
               </label>
               {errors.terms && <p className="mt-1 text-xs text-red-500">{errors.terms.message}</p>}
             </div>
+          </div>
+          
+          {/* ReCAPTCHA Component */}
+          <div className="my-4">
+            <ReCaptcha 
+              onChange={setRecaptchaToken}
+              onExpired={() => setRecaptchaToken(null)}
+              className="flex justify-center"
+            />
+            {errors.recaptchaToken && (
+              <p className="mt-1 text-xs text-red-500">{errors.recaptchaToken.message}</p>
+            )}
           </div>
           
           <div>

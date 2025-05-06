@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import DashboardHeader from '@/components/layout/DashboardHeader';
 import { redirect } from 'next/navigation';
 import RatingsTimelineChart from '@/components/charts/RatingsTimelineChart';
+import ReportDetailContent from '@/components/reports/ReportDetailContent';
 
 // Define parameter types using Next.js 15 pattern
 type ReportParams = { id: string };
@@ -222,7 +223,8 @@ export default async function ReportPage({ params }: { params: Promise<ReportPar
       />
       <main className="container mx-auto px-4 md:px-6 py-8">
         {report && (
-          <div>
+          <ReportDetailContent reportId={id}>
+            <div>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
               <div className="mb-4">
                 <h1
@@ -579,6 +581,7 @@ export default async function ReportPage({ params }: { params: Promise<ReportPar
               </pre>
             </div>
           </div>
+          </ReportDetailContent>
         )}
       </main>
     </div>

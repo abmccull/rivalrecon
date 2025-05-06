@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 // Get recurring analyses for the current user
 export async function GET(request: NextRequest) {
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false });
     
     if (error) {
-      console.error('Error fetching recurring analyses:', error);
+      // Handle error fetching recurring analyses silently
       return NextResponse.json(
         { error: 'Failed to fetch recurring analyses' }, 
         { status: 500 }
@@ -129,7 +129,7 @@ export async function PUT(request: NextRequest) {
       .select();
     
     if (error) {
-      console.error('Error updating recurring analysis:', error);
+      // Handle error updating recurring analysis silently
       return NextResponse.json(
         { error: 'Failed to update recurring analysis' }, 
         { status: 500 }
@@ -195,7 +195,7 @@ export async function DELETE(request: NextRequest) {
       .eq('user_id', session.user.id);
     
     if (error) {
-      console.error('Error deleting recurring analysis:', error);
+      // Handle error deleting recurring analysis silently
       return NextResponse.json(
         { error: 'Failed to delete recurring analysis' }, 
         { status: 500 }

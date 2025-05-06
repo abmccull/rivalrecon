@@ -42,7 +42,8 @@ export default function SubmissionForm() {
       const lastSegment = pathSegments[pathSegments.length - 1];
       const productTitle = lastSegment.replace(/-|_/g, ' ').trim() || 'Product from ' + url.hostname;
       
-      // Create submission record
+      // Create submission record directly in Supabase
+      // This will trigger a webhook that queues the task
       const { data, error: submissionError } = await supabase
         .from('submissions')
         .insert([

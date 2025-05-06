@@ -4,10 +4,11 @@ import { createClient } from '@/lib/supabase/client';
 import { User } from '@supabase/supabase-js';
 import { syncUserProfile } from '@/lib/auth/profile';
 import { useRouter, usePathname } from 'next/navigation';
+import { logger } from '@/lib/logger';
 
 interface AuthContextType {
   user: User | null;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, recaptchaToken?: string) => Promise<void>;
   signOut: () => Promise<void>;
   loading: boolean;
 }
@@ -40,7 +41,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await syncUserProfile(newUser);
       } catch (error) {
-        console.error("Error syncing user profile:", error);
+        logger.error("Error syncing user profile:", error);
       }
     }
   }, []);
@@ -52,7 +53,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error("Error getting session:", error);
+          logger.error("Error getting session:", error);
           setUser(null);
           setLoading(false);
           return;
@@ -85,18 +86,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
                 .single();
               
               if (subError || !subscription) {
-                console.log('No subscription found, redirecting to pricing');
+                logger.log('No subscription found, redirecting to pricing');
                 router.push('/pricing');
                 return;
               }
             } catch (subCheckError) {
-              console.error('Error checking subscription:', subCheckError);
+              logger.error('Error checking subscription:', subCheckError);
               router.push('/pricing');
               return;
             }
           } else if (requiresAuth) {
             // Page requires auth but not subscription, so we're good
-            console.log('User authenticated for auth-only page');
+            // Auth check successful - removed debug logging
           }
         } else {
           setUser(null);
@@ -113,7 +114,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (error) {
-        console.error("Unexpected error getting session:", error);
+        logger.error('AuthProvider: Error checking session', error);
         setUser(null);
       } finally {
         setLoading(false);
@@ -144,20 +145,31 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         listener?.subscription.unsubscribe();
       };
     } catch (error) {
-      console.error("Error setting up auth listener:", error);
+      logger.error("Error setting up auth listener:", error);
       return () => {};
     }
   }, [handleUserUpdate, supabase, router, pathname]);
 
-  // Sign in with email/password
-  const signIn = useCallback(async (email: string, password: string) => {
+  // Sign in with email/password and reCAPTCHA verification
+  const signIn = useCallback(async (email: string, password: string, recaptchaToken?: string) => {
     setLoading(true);
     try {
+      // Create auth options with optional reCAPTCHA token
+      const options: any = {};
+      
+      // Add captcha token if provided
+      if (recaptchaToken) {
+        options.captchaToken = recaptchaToken;
+      }
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password,
+        options
+      });
       
       if (error) {
-        console.error("Error signing in:", error);
+        logger.error("Error signing in:", error);
         setLoading(false);
         throw error;
       }
@@ -167,11 +179,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         await handleUserUpdate(data.session.user);
         // No longer handling redirect here since the sign-in page does it
       } else {
-        console.warn("Sign in returned no session.");
+        logger.warn("Sign in returned no session.");
         throw new Error("No session returned from sign in");
       }
     } catch (error) {
-      console.error("Sign in failed:", error);
+      logger.error("Sign in failed:", error);
       throw error;
     } finally {
       setLoading(false);
@@ -183,13 +195,13 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       // Log the sign out attempt
-      console.log("Attempting to sign out user");
+      logger.debug(`Attempting to sign out user`);
       
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error("Error signing out:", error);
+        logger.error("Error signing out:", error);
       } else {
-        console.log("User signed out successfully");
+        logger.log("User signed out successfully");
         
         // Clear user state
         setUser(null);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import stripe from '@/lib/stripe-server';
 import { createClient } from '@/lib/supabase/server';
+import env from '@/lib/env-config';
 
 export async function POST(request: Request) {
   try {
@@ -112,13 +113,12 @@ export async function POST(request: Request) {
       });
     }
     
-    // Get origin information for success/cancel URLs
+    // Get origin information for success/cancel URLs using our centralized config
     const origin = returnUrl 
       ? new URL(returnUrl).origin 
       : request.headers.get('origin') || 
         request.headers.get('referer')?.replace(/\/[^/]*$/, '') || 
-        process.env.NEXT_PUBLIC_APP_URL || 
-        'http://localhost:3000';
+        env.app.url;
     
     // Create checkout session
     const session = await stripe.checkout.sessions.create({

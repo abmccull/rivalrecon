@@ -67,10 +67,51 @@ const TIMEZONES = [
 ];
 
 const INDUSTRIES = [
-  { value: "food", label: "Food & Beverage" },
-  { value: "health", label: "Health & Wellness" },
-  { value: "beauty", label: "Beauty & Personal Care" },
-  { value: "household", label: "Household Products" },
+  // Food & Beverage Categories
+  { value: "food_beverages", label: "Food & Beverage (General)" },
+  { value: "beverages", label: "Beverages & Drinks" },
+  { value: "coffee_tea", label: "Coffee & Tea" },
+  { value: "snacks", label: "Snacks & Confectionery" },
+  { value: "baked_goods", label: "Baked Goods" },
+  { value: "meal_kits", label: "Meal Kits & Prepared Foods" },
+  { value: "plant_based", label: "Plant-Based & Alternative Foods" },
+  { value: "condiments", label: "Condiments & Sauces" },
+  { value: "dairy_alternatives", label: "Dairy & Alternatives" },
+  { value: "functional_food", label: "Functional Foods & Superfoods" },
+  
+  // Health & Wellness Categories
+  { value: "health_wellness", label: "Health & Wellness (General)" },
+  { value: "supplements", label: "Vitamins & Supplements" },
+  { value: "protein", label: "Protein & Fitness Nutrition" },
+  { value: "natural_remedies", label: "Natural Remedies & Herbals" },
+  { value: "sleep_aids", label: "Sleep & Relaxation Aids" },
+  { value: "mental_wellness", label: "Mental Wellness Products" },
+  
+  // Beauty & Personal Care Categories
+  { value: "beauty_personal", label: "Beauty & Personal Care (General)" },
+  { value: "skincare", label: "Skincare" },
+  { value: "haircare", label: "Haircare" },
+  { value: "cosmetics", label: "Cosmetics & Makeup" },
+  { value: "fragrance", label: "Fragrance & Perfumes" },
+  { value: "oral_care", label: "Oral Care" },
+  { value: "shaving", label: "Shaving & Grooming" },
+  { value: "bath_body", label: "Bath & Body Products" },
+  { value: "clean_beauty", label: "Clean Beauty & Natural Products" },
+  
+  // Household Products Categories
+  { value: "household", label: "Household Products (General)" },
+  { value: "cleaning", label: "Cleaning Supplies" },
+  { value: "laundry", label: "Laundry Products" },
+  { value: "paper_products", label: "Paper Products" },
+  { value: "air_fresheners", label: "Air Fresheners & Home Fragrance" },
+  { value: "sustainable_home", label: "Sustainable Home Products" },
+  
+  // Other CPG Categories
+  { value: "pet_supplies", label: "Pet Food & Supplies" },
+  { value: "baby_products", label: "Baby & Infant Products" },
+  { value: "apparel", label: "Apparel & Wearables" },
+  { value: "home_goods", label: "Home Goods & Décor" },
+  { value: "subscription_boxes", label: "Subscription Boxes" },
   { value: "other", label: "Other" },
 ];
 
@@ -199,7 +240,7 @@ export default function SettingsClient({ profile }: SettingsClientProps) {
     }
   }
 
-  async function handleSave(e: React.FormEvent) {
+  async function handleSave(e: React.FormEvent, section: string) {
     e.preventDefault();
     setSaving(true);
     
@@ -208,6 +249,7 @@ export default function SettingsClient({ profile }: SettingsClientProps) {
       const profileData = {
         ...form,
         id: profile.id, // Ensure the ID is included
+        section, // Include the section being updated
       };
       
       // Send the data to the profile API endpoint
@@ -227,7 +269,7 @@ export default function SettingsClient({ profile }: SettingsClientProps) {
       
       toast({
         title: "Success",
-        description: "Your changes have been saved successfully!",
+        description: `Your ${section} has been updated successfully!`,
         variant: "default",
       });
       
@@ -260,18 +302,11 @@ export default function SettingsClient({ profile }: SettingsClientProps) {
     <>
       <Header />
       
-      {/* Sticky Save Changes Button */}
-      <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+      {/* Page Header */}
+      <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="container mx-auto px-6 py-3">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-[#1F2937]">Account Settings</h1>
-            <button 
-              className="bg-[#2DD4BF] text-white px-4 py-2 rounded-md font-medium hover:bg-opacity-90 transform hover:scale-105 transition-all"
-              onClick={handleSave}
-              disabled={saving}
-            >
-              {saving ? "Saving..." : "Save Changes"}
-            </button>
           </div>
         </div>
       </div>
@@ -416,6 +451,15 @@ export default function SettingsClient({ profile }: SettingsClientProps) {
                             />
                           </div>
                         </div>
+                        <div className="mt-6 flex justify-end">
+                          <button 
+                            className="bg-[#2DD4BF] text-white px-4 py-2 rounded-md font-medium hover:bg-opacity-90 transform hover:scale-105 transition-all"
+                            onClick={(e) => handleSave(e, 'Personal Information')}
+                            disabled={saving}
+                          >
+                            {saving ? "Saving..." : "Save Changes"}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -492,6 +536,15 @@ export default function SettingsClient({ profile }: SettingsClientProps) {
                               />
                             </div>
                           </div>
+                        </div>
+                        <div className="mt-6 flex justify-end">
+                          <button 
+                            className="bg-[#2DD4BF] text-white px-4 py-2 rounded-md font-medium hover:bg-opacity-90 transform hover:scale-105 transition-all"
+                            onClick={(e) => handleSave(e, 'Company Information')}
+                            disabled={saving}
+                          >
+                            {saving ? "Saving..." : "Save Changes"}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -603,6 +656,15 @@ export default function SettingsClient({ profile }: SettingsClientProps) {
                               </div>
                             </div>
                           </div>
+                        </div>
+                        <div className="mt-6 flex justify-end">
+                          <button 
+                            className="bg-[#2DD4BF] text-white px-4 py-2 rounded-md font-medium hover:bg-opacity-90 transform hover:scale-105 transition-all"
+                            onClick={(e) => handleSave(e, 'Preferences')}
+                            disabled={saving}
+                          >
+                            {saving ? "Saving..." : "Save Changes"}
+                          </button>
                         </div>
                       </div>
                     </div>

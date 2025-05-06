@@ -3,6 +3,7 @@ import { headers } from 'next/headers';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import stripe from '@/lib/stripe-server';
+import { logger } from '@/lib/logger';
 
 // Use the service role to bypass RLS policies for admin operations
 const supabaseAdmin = createClient(
@@ -11,19 +12,36 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST(request: Request) {
+  // Set security headers for the response
+  const responseHeaders = {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
+    'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin'
+  };
+  
   try {
     const body = await request.text();
     // Get Stripe signature from request headers
     const signature = request.headers.get('Stripe-Signature');
     
-    // Debug logging to ensure webhook is being called
-    console.log('Received Stripe webhook event');
+    // Webhook event received
     
     if (!signature) {
-      console.error('No Stripe signature found in request headers');
+      logger.error('No Stripe signature found in request headers');
       return NextResponse.json(
-        { error: 'No Stripe signature found in request' },
-        { status: 400 }
+        { 
+          error: 'Invalid request', 
+          message: 'No Stripe signature found in request',
+          code: 'webhook_signature_missing'
+        },
+        { 
+          status: 400,
+          headers: responseHeaders 
+        }
       );
     }
     
@@ -31,10 +49,17 @@ export async function POST(request: Request) {
     
     // Check if webhook secret is configured
     if (!process.env.STRIPE_WEBHOOK_SECRET) {
-      console.error('STRIPE_WEBHOOK_SECRET is not configured in environment variables');
+      logger.error('STRIPE_WEBHOOK_SECRET is not configured in environment variables');
       return NextResponse.json(
-        { error: 'Webhook secret not configured' },
-        { status: 500 }
+        { 
+          error: 'Server configuration error', 
+          message: 'Webhook secret not configured',
+          code: 'webhook_secret_missing'
+        },
+        { 
+          status: 500,
+          headers: responseHeaders 
+        }
       );
     }
     
@@ -44,17 +69,24 @@ export async function POST(request: Request) {
         signature,
         process.env.STRIPE_WEBHOOK_SECRET
       );
+      logger.debug(`Successfully verified webhook: ${event.type}`);
       
-      // Log the event type for debugging
-      console.log(`✅ Successfully verified webhook: ${event.type}`);
+      // Webhook successfully verified
     } catch (error: any) {
-      console.error(`❌ Webhook signature verification failed: ${error.message}`);
+      logger.error(`Webhook signature verification failed: ${error.message}`);
       // Log more details about the error
-      console.error(`Stripe-Signature: ${signature?.substring(0, 20)}...`); // Only log part of signature for security
-      console.error(`Webhook Secret configured: ${process.env.STRIPE_WEBHOOK_SECRET ? 'Yes' : 'No'}`);
+      logger.error(`Stripe-Signature: ${signature?.substring(0, 20)}...`); // Only log part of signature for security
+      logger.error(`Webhook Secret configured: ${process.env.STRIPE_WEBHOOK_SECRET ? 'Yes' : 'No'}`);
       return NextResponse.json(
-        { error: `Webhook signature verification failed: ${error.message}` },
-        { status: 400 }
+        { 
+          error: 'Invalid request',
+          message: `Webhook signature verification failed: ${error.message}`,
+          code: 'webhook_signature_invalid'
+        },
+        { 
+          status: 400, 
+          headers: responseHeaders 
+        }
       );
     }
     
@@ -64,31 +96,30 @@ export async function POST(request: Request) {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
         const subscription = event.data.object as Stripe.Subscription;
-        console.log(`Processing subscription event: ${event.type}`);
+        logger.debug(`Processing subscription event: ${event.type}`); 
         await handleSubscriptionChange(subscription);
         break;
       case 'invoice.payment_succeeded':
         const invoice = event.data.object as any; // Use any temporarily to handle Stripe type inconsistencies
         if (invoice && invoice.subscription) {
-          console.log(`Processing successful payment for subscription: ${invoice.subscription}`);
-          // Fetch the subscription to get updated data
+          logger.debug(`Processing successful payment for subscription: ${invoice.subscription}`); 
           try {
             const subscription = await stripe.subscriptions.retrieve(String(invoice.subscription));
             await handleSubscriptionChange(subscription);
           } catch (error) {
-            console.error(`Error retrieving subscription for invoice ${invoice.id}:`, error);
+            logger.error(`Error retrieving subscription for invoice ${invoice.id}:`, error);
           }
         }
         break;
       case 'invoice.payment_failed':
         const failedInvoice = event.data.object as any; // Use any temporarily to handle Stripe type inconsistencies
         if (failedInvoice && failedInvoice.subscription) {
-          console.log(`Payment failed for subscription: ${failedInvoice.subscription}`);
+          logger.debug(`Processing failed payment for subscription: ${failedInvoice.subscription}`); 
           try {
             const subscription = await stripe.subscriptions.retrieve(String(failedInvoice.subscription));
             await handleSubscriptionChange(subscription);
           } catch (error) {
-            console.error(`Error retrieving subscription for failed invoice ${failedInvoice.id}:`, error);
+            logger.error(`Error retrieving subscription for failed invoice ${failedInvoice.id}:`, error);
           }
         }
         break;
@@ -96,19 +127,33 @@ export async function POST(request: Request) {
       case 'invoice.paid':
       case 'payment_intent.created':
       case 'payment_intent.succeeded':
+        logger.debug(`Acknowledged event type: ${event.type}`);
         // We acknowledge these events but don't need special handling
-        console.log(`Acknowledged event type: ${event.type}`);
+        // Event acknowledged
         break;
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        logger.debug(`Unhandled event type: ${event.type}`);
+        // Unhandled event type
     }
     
-    return NextResponse.json({ received: true });
-  } catch (error: any) {
-    console.error('Webhook error:', error);
     return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
+      { received: true, success: true },
+      { headers: responseHeaders }
+    );
+  } catch (error: any) {
+    const errorMsg = error.message;
+    logger.error('Error processing webhook event:', errorMsg);
+    return NextResponse.json(
+      { 
+        error: 'Server error', 
+        message: 'Webhook processing failed', 
+        detail: errorMsg,
+        code: 'webhook_processing_error'
+      },
+      { 
+        status: 500,
+        headers: responseHeaders 
+      }
     );
   }
 }
@@ -117,6 +162,24 @@ export async function POST(request: Request) {
  * Handles subscription created or updated events
  */
 async function handleSubscriptionChange(subscription: any) {
+  logger.debug('Received Stripe webhook event'); 
+  logger.debug('Processing Stripe subscription object with detailed data:');
+  logger.debug(JSON.stringify({
+    id: subscription.id,
+    customer: subscription.customer,
+    status: subscription.status,
+    current_period_start: subscription.current_period_start,
+    current_period_start_date: subscription.current_period_start ? new Date(subscription.current_period_start * 1000).toISOString() : null,
+    current_period_end: subscription.current_period_end,
+    current_period_end_date: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+    trial_start: subscription.trial_start,
+    trial_start_date: subscription.trial_start ? new Date(subscription.trial_start * 1000).toISOString() : null,
+    trial_end: subscription.trial_end,
+    trial_end_date: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+    metadata: subscription.metadata,
+    items: subscription.items?.data,
+  }, null, 2));
+
   const customerId = subscription.customer;
   const subscriptionId = subscription.id;
   const status = subscription.status;
@@ -129,6 +192,7 @@ async function handleSubscriptionChange(subscription: any) {
     // Try to get plan ID from price metadata in Stripe
     const price = await stripe.prices.retrieve(priceId);
     planId = price.metadata?.plan_id || 'starter';
+    // Plan ID retrieved from price metadata
   }
   
   // Find customer in database
@@ -169,7 +233,7 @@ async function handleSubscriptionChange(subscription: any) {
     const userId = subscription.metadata?.userId;
     
     if (!userId) {
-      console.error('No user ID found in subscription metadata');
+      logger.error('No user ID found in subscription metadata');
       return;
     }
     
@@ -197,7 +261,7 @@ async function handleSubscriptionChange(subscription: any) {
   }
   
   // Log the event
-  console.log(`Subscription ${status} for customer ${customerId}, plan: ${planId}`);
+  // Subscription status updated
 }
 
 /**
@@ -219,9 +283,9 @@ async function handleSubscriptionCanceled(subscription: any) {
     .eq('stripe_subscription_id', subscriptionId);
     
   if (error) {
-    console.error('Error canceling subscription:', error);
+    logger.error('Error canceling subscription:', error);
   } else {
-    console.log(`Subscription canceled for customer ${customerId}`);
+    logger.info(`Subscription ${subscriptionId} successfully canceled for customer ${customerId}`);
   }
 }
 
@@ -255,9 +319,9 @@ async function handleInvoicePaymentSucceeded(invoice: any) {
       .eq('stripe_subscription_id', subscriptionId);
       
     if (error) {
-      console.error('Error updating subscription after payment success:', error);
+      logger.error('Error updating subscription after payment success:', error);
     } else {
-      console.log(`Payment succeeded for subscription ${subscriptionId}`);
+      logger.info(`Payment success processed for subscription ${subscriptionId}`);
     }
   }
 }
@@ -283,10 +347,10 @@ async function handleInvoicePaymentFailed(invoice: any) {
     .eq('stripe_subscription_id', subscriptionId);
     
   if (error) {
-    console.error('Error updating subscription after payment failure:', error);
+    logger.error('Error updating subscription after payment failure:', error);
   } else {
-    console.log(`Payment failed for subscription ${subscriptionId}`);
+    logger.info(`Payment failure processed for subscription ${subscriptionId}`);
     
-    // You could send an email notification to the user here
+    // TODO: Send an email notification to the user here
   }
 }

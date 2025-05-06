@@ -10,6 +10,7 @@ import QuickStats from '@/components/dashboard/QuickStats';
 import RecentInsights from '@/components/dashboard/RecentInsights';
 import DashboardHeader from '@/components/layout/DashboardHeader';
 import UsageCounter from '@/components/dashboard/UsageCounter';
+import DashboardContent from '@/components/dashboard/DashboardContent';
 
 export default async function DashboardPage() {
   // Get Supabase client
@@ -64,38 +65,13 @@ export default async function DashboardPage() {
             <p className="text-gray-600 mt-2">Submit product URLs for analysis and review your submission history</p>
           </div>
           
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Left Column - URL Submission Form */}
-            <div className="lg:col-span-1">
-              <SubmissionForm />
-              <BulkUpload />
-            </div>
-            
-            {/* Right Column - Analysis History & Quick Stats */}
-            <div className="lg:col-span-2">
-              {/* Monthly Usage Counter */}
-              <div className="mb-6">
-                <UsageCounter 
-                  used={usageData.used} 
-                  limit={usageData.limit} 
-                  renewalDate={usageData.renewalDate}
-                  isUnlimited={usageData.isUnlimited} 
-                />
-              </div>
-              
-              <div className="mb-10">
-                <AnalysisHistory submissions={submissions} />
-              </div>
-              
-              <div className="mb-10">
-                <QuickStats metrics={metrics} />
-              </div>
-              
-              <div className="mb-6">
-                <RecentInsights insights={insights} />
-              </div>
-            </div>
-          </div>
+          {/* Pass the dashboard data to the client component which handles subscription checking */}
+          <DashboardContent 
+            metrics={metrics}
+            submissions={submissions}
+            insights={insights}
+            usageData={usageData}
+          />
         </div>
       </main>
 

@@ -116,7 +116,7 @@ export default function Header() {
           </div>
           <nav className="hidden md:flex space-x-6">
             <Link href="/dashboard" className="text-gray-800 font-medium hover:text-[#2DD4BF] transition-colors cursor-pointer">Dashboard</Link>
-            <Link href="/analysis" className="text-gray-800 font-medium hover:text-[#2DD4BF] transition-colors cursor-pointer">Analysis</Link>
+            <Link href="/reports" className="text-gray-800 font-medium hover:text-[#2DD4BF] transition-colors cursor-pointer">Reports</Link>
           </nav>
         </div>
         <div className="flex items-center space-x-4">
