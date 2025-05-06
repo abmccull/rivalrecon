@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
+import { getRedirectURL } from "@/lib/auth-helpers";
 import Link from "next/link";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -100,7 +101,10 @@ function SignInForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          // Use the new helper function for proper redirect handling across environments
+          redirectTo: getRedirectURL('/auth/callback'),
+          // Include scopes for profile information
+          scopes: 'email profile'
         },
       });
       if (error) throw error;

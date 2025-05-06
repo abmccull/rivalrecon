@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { getRedirectURL } from "@/lib/auth-helpers";
 import { createClient } from "@/lib/supabase/client";
 import ReCaptcha from "@/components/auth/ReCaptcha";
 import Link from "next/link";
@@ -54,8 +55,10 @@ export default function SignUpPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+  const supabase = createClient();
   
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -83,7 +86,7 @@ export default function SignUpPage() {
     }
     
     try {
-      const supabase = createClient();
+      // createClient() already called above
       const { error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -113,6 +116,27 @@ export default function SignUpPage() {
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  const handleGoogleSignUp = async () => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          // Use the new helper function for proper redirect handling across environments
+          redirectTo: getRedirectURL('/auth/callback'),
+          // Include scopes for profile information
+          scopes: 'email profile'
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Google sign-up error:', err);
+      setError(err.message || 'Failed to initiate Google sign-up.');
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -249,14 +273,24 @@ export default function SignUpPage() {
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
-            <button type="button" className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-              <FontAwesomeIcon icon={faGoogle} className="text-lg mr-2" />
-              Google
-            </button>
-            <button type="button" className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-              <FontAwesomeIcon icon={faMicrosoft} className="text-lg mr-2" />
-              Microsoft
+          <div className="grid grid-cols-1 gap-3">
+            <button 
+              type="button" 
+              onClick={handleGoogleSignUp}
+              disabled={authLoading || googleLoading}
+              className="w-full inline-flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {googleLoading ? (
+                <>
+                  <FontAwesomeIcon icon={faCircleNotch} className="animate-spin text-lg mr-2" />
+                  Connecting with Google...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faGoogle} className="text-lg mr-2" />
+                  Sign up with Google
+                </>
+              )}
             </button>
           </div>
         </form>
