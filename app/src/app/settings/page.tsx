@@ -33,17 +33,24 @@ interface ProfileData {
 }
 
 export default async function SettingsPage() {
-  // SSR: Create Supabase client and get session
+  // SSR: Create Supabase client and get authenticated user data
   const supabase = await createClient();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) {
     return <div className="p-8 text-center">Please sign in to view your account settings.</div>;
   }
+  
+  // Get authenticated user data (more secure than using session directly)
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return <div className="p-8 text-center">Authentication error. Please sign in again.</div>;
+  }
+  
   // Fetch user profile server-side
   const { data: profile, error } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
   if (error || !profile) {
     return <div className="p-8 text-center">Could not load profile information.</div>;

@@ -9,6 +9,7 @@ import KeyInsightsColumn from "@/components/analysis/KeyInsightsColumn";
 import DataVisualizations from "@/components/analysis/DataVisualizations";
 import StrategicRecommendations from "@/components/analysis/StrategicRecommendations";
 import Footer from "@/components/landing/Footer";
+import ErrorBoundary from "@/components/layout/ErrorBoundary";
 import { Analysis } from "@/lib/analysis";
 
 interface AnalysisDashboardProps {
@@ -16,32 +17,25 @@ interface AnalysisDashboardProps {
 }
 
 export default function AnalysisDashboard({ analysis }: AnalysisDashboardProps) {
-  console.log('[AnalysisDashboard] Component rendering with analysis:', {
-    id: analysis?.id,
-    display_name: analysis?.display_name,
-    hasData: !!analysis
-  });
+  // Initialize component state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
-    console.log('[AnalysisDashboard] useEffect running, analysis:', {
-      id: analysis?.id,
-      hasData: !!analysis
-    });
+
     
     // Validate analysis data
     if (!analysis || !analysis.id) {
-      console.log('[AnalysisDashboard] Error: Invalid analysis data');
+
       setError("Invalid analysis data");
       setLoading(false);
       return;
     }
     
     // Short timeout to ensure smooth transition
-    console.log('[AnalysisDashboard] Setting timeout to finish loading');
+
     const timer = setTimeout(() => {
-      console.log('[AnalysisDashboard] Loading complete');
+
       setLoading(false);
     }, 300);
     
@@ -79,14 +73,20 @@ export default function AnalysisDashboard({ analysis }: AnalysisDashboardProps) 
         {/* Main Analysis Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Left Column - Key Insights */}
-          <KeyInsightsColumn analysis={analysis} />
+          <ErrorBoundary>
+            <KeyInsightsColumn analysis={analysis} />
+          </ErrorBoundary>
           
           {/* Center & Right Columns - Data Visualizations */}
-          <DataVisualizations analysis={analysis} />
+          <ErrorBoundary>
+            <DataVisualizations analysis={analysis} />
+          </ErrorBoundary>
         </div>
         
         {/* Recommendations Section */}
-        <StrategicRecommendations analysis={analysis} />
+        <ErrorBoundary>
+          <StrategicRecommendations analysis={analysis} />
+        </ErrorBoundary>
       </main>
     </div>
   );

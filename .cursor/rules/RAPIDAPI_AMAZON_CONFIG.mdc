@@ -1,0 +1,161 @@
+# RapidAPI Amazon Data Configuration
+
+This document outlines the configuration and usage of the RapidAPI Amazon Data services used in the RivalRecon application.
+
+## Environment Variables
+
+```
+RAPIDAPI_KEY=your_api_key
+RAPIDAPI_HOST=real-time-amazon-data.p.rapidapi.com
+RAPIDAPI_PRODUCT_HOST=amazon23.p.rapidapi.com  # Optional: For product details
+```
+
+## Endpoints
+
+### 1. Product Reviews Endpoint
+
+**URL**: `https://real-time-amazon-data.p.rapidapi.com/product-reviews`
+
+**Method**: GET
+
+**Required Headers**:
+```
+"x-rapidapi-key": "RAPIDAPI_KEY"
+"x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com"
+```
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Description | Default |
+|-----------|------|----------|-------------|---------|
+| asin | String | Yes | Product ASIN for which to get reviews | - |
+| country | String | No | Sets the Amazon domain, marketplace country | US |
+| page | Number | No | Results page to return | 1 |
+| sort_by | Enum | No | Return reviews in a specific sort order | TOP_REVIEWS |
+| star_rating | Enum | No | Only return reviews with a specific star rating | ALL |
+| verified_purchases_only | Boolean | No | Only return reviews by verified purchasers | false |
+| images_or_videos_only | Boolean | No | Only return reviews containing images/videos | false |
+| current_format_only | Boolean | No | Only return reviews of the current format/variant | false |
+
+**Allowed Values**:
+- `sort_by`: TOP_REVIEWS, MOST_RECENT
+- `star_rating`: ALL, 5_STARS, 4_STARS, 3_STARS, 2_STARS, 1_STARS, POSITIVE, CRITICAL
+- `country`: US, AU, BR, CA, CN, FR, DE, IN, IT, MX, NL, SG, ES, TR, AE, GB, JP, SA, PL, SE, BE, EG
+
+**Sample Request**:
+```python
+import requests
+
+url = "https://real-time-amazon-data.p.rapidapi.com/product-reviews"
+
+querystring = {
+    "asin": "B07ZPKN6YR",
+    "country": "US",
+    "page": "1",
+    "sort_by": "TOP_REVIEWS",
+    "star_rating": "ALL",
+    "verified_purchases_only": "false",
+    "images_or_videos_only": "false",
+    "current_format_only": "false"
+}
+
+headers = {
+    "x-rapidapi-key": "your_api_key",
+    "x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com"
+}
+
+response = requests.get(url, headers=headers, params=querystring)
+```
+
+**Response Structure**:
+```json
+{
+  "status": "OK",
+  "request_id": "092693b6-0035-4d51-94f7-dc7d4fb180dc",
+  "parameters": {
+    "asin": "B07ZPKN6YR",
+    "country": "US",
+    "sort_by": "TOP_REVIEWS",
+    "verified_purchases_only": false,
+    "images_or_videos_only": false,
+    "current_format_only": false,
+    "star_rating": "ALL",
+    "page": 1
+  },
+  "data": {
+    "asin": "B07ZPKN6YR",
+    "country": "US",
+    "domain": "www.amazon.com",
+    "reviews": [
+      {
+        "review_id": "R3IP3AW6JCCIH6",
+        "review_title": "REVIEW TITLE",
+        "review_comment": "REVIEW TEXT CONTENT",
+        "review_star_rating": "5",
+        "review_link": "https://www.amazon.com/gp/customer-reviews/R3IP3AW6JCCIH6",
+        "review_author_id": "AGV4EJPKXIBH34HA77QD7KJF4SCQ",
+        "review_author": "Author Name",
+        "review_author_url": "https://www.amazon.com/gp/profile/...",
+        "review_author_avatar": "https://images-na.ssl-images-amazon.com/...",
+        "review_images": [],
+        "review_video": null,
+        "review_date": "Reviewed in the United States on September 18, 2024",
+        "is_verified_purchase": true,
+        "helpful_vote_statement": "93 people found this helpful",
+        "reviewed_product_asin": "B07ZPKN6YR",
+        "is_vine": false
+      }
+      // Additional reviews...
+    ]
+  }
+}
+```
+
+### 2. Product Details Endpoint
+
+**URL**: `https://real-time-amazon-data.p.rapidapi.com/product-details`
+
+**Method**: GET
+
+**Required Headers**:
+```
+"x-rapidapi-key": "RAPIDAPI_KEY"
+"x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com"
+```
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Description | Default |
+|-----------|------|----------|-------------|---------|
+| asin | String | Yes | Product ASIN for which to get details | - |
+| country | String | No | Sets the Amazon domain, marketplace country | US |
+
+**Sample Request**:
+```python
+import requests
+
+url = "https://real-time-amazon-data.p.rapidapi.com/product-details"
+
+querystring = {"asin":"B07ZPKBL9V","country":"US"}
+
+headers = {
+    "x-rapidapi-key": "your_api_key",
+    "x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com"
+}
+
+response = requests.get(url, headers=headers, params=querystring)
+```
+
+## Implementation in RivalRecon
+
+In the `worker.py` file, we implement the reviews API as follows:
+
+1. Extract the ASIN from the Amazon URL
+2. Set up the proper headers with the API key and host from environment variables
+3. Make a request to the `/product-reviews` endpoint with the required parameters
+4. Process the reviews from the response
+5. Handle pagination to fetch multiple pages of reviews
+
+For product details, we follow a similar pattern but use the `/product-details` endpoint.
+
+This configuration ensures that our application correctly uses the RapidAPI services to fetch actual Amazon reviews and product information.

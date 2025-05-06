@@ -19,7 +19,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'URL is required' });
     }
 
-    console.log(`Processing submission for URL: ${url} from user: ${userId}, Is competitor product: ${is_competitor_product}`);
+
 
     // Create submission record
     const { data: submission, error: submissionError } = await supabase
@@ -40,19 +40,19 @@ router.post('/', async (req, res) => {
       throw submissionError;
     }
 
-    console.log(`Submission created with ID: ${submission.id}`);
+
 
     // Queue scraping task with proper error handling
     try {
       // Queue task to scrape reviews
-      console.log(`Queueing scrape task for URL: ${url} and submission ID: ${submission.id}`);
+
       const taskId = await taskManager.queueScrapeTask(submission.id, url);
-      console.log(`Task queued successfully with ID: ${taskId}`);
+
       
       // Store the task ID in Redis instead of updating the Supabase record
       // This avoids the schema issue with the missing task_id column
       await redis.set(`submission:${submission.id}:task_id`, taskId);
-      console.log(`Stored task ID ${taskId} for submission ${submission.id} in Redis`);
+
       
       res.json({
         message: 'Submission created successfully',
@@ -84,7 +84,7 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log('Fetching submissions for user:', userId);
+
 
     const { data: submissions, error } = await supabase
       .from('submissions')
@@ -97,7 +97,7 @@ router.get('/', async (req, res) => {
       throw error;
     }
 
-    console.log(`Successfully fetched ${submissions?.length || 0} submissions`);
+
     res.json(submissions);
 
   } catch (error) {

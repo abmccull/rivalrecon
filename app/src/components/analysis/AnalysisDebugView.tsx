@@ -14,11 +14,7 @@ export default function AnalysisDebugView({ serializedAnalysis }: AnalysisDebugV
     // Parse the serialized data for display
     const analysis = JSON.parse(serializedAnalysis) as Analysis;
     
-    console.log('[AnalysisDebugView] Rendering with analysis data:', { 
-      id: analysis?.id,
-      hasProps: !!analysis,
-      keyCount: Object.keys(analysis || {}).length
-    });
+    // Parse and render analysis data
 
     // Simple display of key analysis properties
     return (

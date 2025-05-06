@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { DashboardSubmission } from '@/lib/dashboard';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { createClient } from '@/lib/supabase/client';
+import type { SupabaseClient } from '@/lib/supabase/custom-types';
+import { useToast } from '@/components/ui/use-toast';
 
 // Custom tooltip component that won't get cropped by table edges
 function ActionTooltip({ text }: { text: string }) {
@@ -24,6 +26,7 @@ export default function AnalysisHistory({ submissions = [] }: { submissions: Das
   const [selectedSubmission, setSelectedSubmission] = useState<DashboardSubmission | null>(null);
   const [modalPosition, setModalPosition] = useState<{ x: number; y: number } | undefined>(undefined);
   const [isRefreshing, setIsRefreshing] = useState<string | null>(null); // Track which submission is refreshing
+  const { toast } = useToast(); // Initialize toast notification system
 
   // Helper function to get appropriate emoji for product category
   const getCategoryIcon = (category: string, isCompetitor: boolean) => {
@@ -79,6 +82,183 @@ export default function AnalysisHistory({ submissions = [] }: { submissions: Das
     submission.categoryName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleDeleteClick = (submission: DashboardSubmission, event: React.MouseEvent) => {
+    setSelectedSubmission(submission);
+    // Calculate position relative to the viewport
+    const rect = (event.target as Element).getBoundingClientRect();
+    setModalPosition({ x: rect.left + window.scrollX, y: rect.bottom + window.scrollY });
+    setIsDeleteModalOpen(true);
+  };
+
+  // Handle refresh action
+  const handleRefresh = async (submissionToRefresh: DashboardSubmission) => {
+    if (isRefreshing) return; // Prevent multiple clicks if already processing one
+    
+    const originalSubmissionId = submissionToRefresh.id;
+    setIsRefreshing(originalSubmissionId); // Track which original submission is being processed
+
+    try {
+      const supabase = createClient();
+      
+      // Get current user - necessary for the new submission record
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      // Create a new submission record for the refresh
+      const { error } = await supabase
+        .from('submissions')
+        .insert({
+          url: submissionToRefresh.url, // Copy URL from original
+          user_id: user.id,            // Assign to current user
+          status: 'pending',             // Mark as pending for the backend task
+          refresh_parent_id: originalSubmissionId, // Link to the original submission
+          product_title: submissionToRefresh.productTitle, // Copy basic info
+          asin: submissionToRefresh.asin // Copy basic info
+        });
+
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw new Error(`Supabase error: ${error.message}`);
+      }
+      
+      // Increment the submission counter
+      // Add detailed logging to help debug the issue
+      console.log('Incrementing submission counter for refresh operation, user:', user.id);
+      
+      try {
+        // Cast to our custom SupabaseClient type to enable proper type checking
+        const customClient = supabase as unknown as SupabaseClient;
+        const { error: counterError } = await customClient.rpc(
+          'increment_submission_counter', // Function name as it exists in Supabase
+          { user_id_param: user.id }
+        );
+
+        if (counterError) {
+          console.error('Error incrementing submission counter:', counterError);
+        } else {
+          console.log('Successfully incremented submission counter for refresh');
+        }
+      } catch (counterErr) {
+        console.error('Exception in counter increment during refresh:', counterErr);
+      }
+
+      toast({
+        title: "Refresh Queued",
+        description: `Analysis refresh added to the queue for ${submissionToRefresh.displayName || submissionToRefresh.productTitle}.`, // Updated message
+        variant: "default",
+        className: "bg-blue-100/10 border-blue-500/20 text-[#1F2937]"
+      });
+      
+      // No page reload needed - backend handles status changes now
+      // window.location.reload(); 
+
+    } catch (error) {
+      console.error('Error queuing refresh:', error);
+      toast({ 
+        title: "Refresh Failed",
+        description: `Could not add refresh to queue. ${error instanceof Error ? error.message : 'Please try again.'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(null); 
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (selectedSubmission) {
+      try {
+        console.log('Deleting analysis for', selectedSubmission.id);
+        
+        // Create Supabase client
+        const supabase = createClient();
+        
+        // Step 1: First handle the foreign key constraint by updating child submissions
+        // that reference this submission as their parent (through refresh_parent_id)
+        const { error: updateChildrenError } = await supabase
+          .from('submissions')
+          .update({ refresh_parent_id: null }) // Remove the reference
+          .eq('refresh_parent_id', selectedSubmission.id);
+        
+        if (updateChildrenError) {
+          console.log('Warning: Could not update child submissions:', updateChildrenError);
+          // Continue anyway - there might not be any child submissions
+        }
+        
+        // Step 2: Delete reviews associated with this submission
+        const { error: deleteReviewsError } = await supabase
+          .from('reviews')
+          .delete()
+          .eq('submission_id', selectedSubmission.id);
+          
+        if (deleteReviewsError) {
+          console.log('Warning: Could not delete related reviews:', deleteReviewsError);
+          // Continue anyway - there might not be any reviews
+        }
+        
+        // Step 3: Delete analysis associated with this submission
+        const { error: deleteAnalysisError } = await supabase
+          .from('analyses')
+          .delete()
+          .eq('submission_id', selectedSubmission.id);
+        
+        if (deleteAnalysisError) {
+          console.log('Warning: Could not delete analysis:', deleteAnalysisError);
+          // Continue - there might not be an analysis yet
+        }
+        
+        // Step 4: Finally delete the submission itself
+        const { error: deleteSubmissionError } = await supabase
+          .from('submissions')
+          .delete()
+          .eq('id', selectedSubmission.id);
+        
+        if (deleteSubmissionError) {
+          // This is a critical error - if we get here, something is wrong
+          throw deleteSubmissionError;
+        }
+        
+        // Show a styled toast notification instead of browser alert
+        toast({
+          title: "Analysis Deleted",
+          description: `${selectedSubmission.displayName || selectedSubmission.productTitle} has been deleted.`,
+          variant: "default",
+          className: "bg-[#2DD4BF]/10 border-[#2DD4BF]/20 text-[#1F2937]"
+        });
+        
+        // Refresh the submissions list
+        window.location.reload();
+        
+        // Close the modal
+        setIsDeleteModalOpen(false);
+        setSelectedSubmission(null);
+        setModalPosition(undefined);
+      } catch (error) {
+        console.error('Error deleting analysis:', error);
+        
+        // Use toast instead of alert for error messages
+        toast({
+          title: "Delete Failed",
+          description: `Failed to delete analysis. ${error instanceof Error ? error.message : 'Please try again.'} Error details have been logged to console.`,
+          variant: "destructive",
+        });
+        
+        // Log more detailed error information
+        if (error instanceof Error) {
+          console.log('Error name:', error.name);
+          console.log('Error message:', error.message);
+          console.log('Error stack:', error.stack);
+        } else {
+          console.log('Non-Error object thrown:', error);
+        }
+        
+        // Close the modal
+        setIsDeleteModalOpen(false);
+        setSelectedSubmission(null);
+        setModalPosition(undefined);
+      }
+    }
+  };
+
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-lg">
       <div className="px-4 py-5 sm:px-6 flex justify-between items-center">
@@ -122,9 +302,6 @@ export default function AnalysisHistory({ submissions = [] }: { submissions: Das
                 Brand
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Type
               </th>
             </tr>
@@ -132,7 +309,7 @@ export default function AnalysisHistory({ submissions = [] }: { submissions: Das
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredSubmissions.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                <td colSpan={6} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
                   No analyses found. Try a different search term or add a new analysis.
                 </td>
               </tr>
@@ -145,73 +322,35 @@ export default function AnalysisHistory({ submissions = [] }: { submissions: Das
                       {/* View button with tooltip */}
                       <div className="relative group">
                         <Link
-                          href={submission.analysisId ? `/reports/${submission.analysisId}` : `/reports/${submission.id}`}
+                          href={`/reports/${submission.id}`} // Use submission.id directly
                           className="text-blue-600 hover:text-blue-900"
                           aria-label="View analysis"
                         >
                           <span className="text-lg">👁️</span>
                         </Link>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
-                          View Analysis
-                        </div>
+                        <ActionTooltip text="View Analysis" />
                       </div>
-                      {/* Download button with tooltip */}
-                      <div className="group inline-flex items-center relative">
-                        {submission.status === 'completed' ? (
-                          <button
-                            className="text-blue-500 hover:text-blue-700 flex items-center relative"
-                            aria-label="Download report"
-                            onClick={() => {
-                              console.log('Attempting to download report for', submission.id);
-                              alert(`Download functionality is being rebuilt. Report for ${submission.productTitle} will be available soon.`);
-                            }}
-                          >
-                            <span className="text-lg">📥</span>
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 cursor-not-allowed flex items-center">
-                            <span className="text-lg">📥</span>
-                          </span>
-                        )}
-                        <span className="tooltip-container pointer-events-none">
-                          <span className="fixed top-auto left-auto hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-4 whitespace-nowrap z-[100] shadow-lg">
-                            Download Report
-                            <span className="absolute bottom-[-5px] left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-gray-800"></span>
-                          </span>
-                        </span>
-                      </div>
-                      {/* Refresh button with tooltip */}
-                      <div className="group inline-flex items-center relative">
-                        <button
-                          className={`${submission.status === 'processing' || submission.status === 'refreshing' || isRefreshing === submission.id ? 'text-gray-400 cursor-not-allowed' : 'text-green-500 hover:text-green-700'} flex items-center relative`}
-                          aria-label="Refresh analysis"
-                          disabled={submission.status === 'processing' || submission.status === 'refreshing' || isRefreshing === submission.id}
-                          onClick={() => {
-                            console.log('Refresh clicked for', submission.id);
-                            setIsRefreshing(submission.id);
-                            alert(`Refresh functionality is being rebuilt. Analysis for ${submission.productTitle} will be updated soon.`);
-                            setTimeout(() => {
-                              setIsRefreshing(null);
-                            }, 2000);
-                          }}
-                        >
-                          <span className="text-lg">{isRefreshing === submission.id ? '⏳' : '🔄'}</span>
-                        </button>
-                        <span className="tooltip-container pointer-events-none">
-                          <span className="fixed top-auto left-auto hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-4 whitespace-nowrap z-[100] shadow-lg">
-                            {isRefreshing === submission.id ? 'Refreshing...' : 'Refresh Analysis'}
-                            <span className="absolute bottom-[-5px] left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[5px] border-t-gray-800"></span>
-                          </span>
-                        </span>
-                      </div>
+                      {/* Refresh Button */}
+                      <button 
+                        className="relative group text-blue-600 hover:text-blue-900 disabled:opacity-50 disabled:cursor-not-allowed mx-1"
+                        onClick={() => handleRefresh(submission)} // Pass the whole submission object
+                        disabled={isRefreshing === submission.id || submission.status === 'pending' || submission.status === 'processing' || submission.status === 'refreshing'} // Disable if already refreshing/processing or pending
+                        aria-label={isRefreshing === submission.id ? "Refreshing analysis" : "Refresh analysis"}
+                      >
+                        <span className="text-lg">{isRefreshing === submission.id ? '⏳' : '🔄'}</span>
+                        <ActionTooltip text={isRefreshing === submission.id ? "Refreshing..." : "Refresh Analysis"} />
+                      </button>
                       {/* Delete button with tooltip */}
                       <div className="group inline-flex items-center relative">
-                        <button
-                          className="text-red-500 hover:text-red-700 flex items-center relative"
-                          aria-label="Delete analysis"
-                          onClick={() => handleDeleteClick(submission)}
+                        <button 
+                          title="Delete Analysis" 
+                          className="text-gray-400 hover:text-red-600 relative group"
+                          onClick={(e) => handleDeleteClick(submission, e)} // Call the handler
                         >
-                          <span className="text-lg">🗑️</span>
+                          {/* Trash Can Icon */}
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
                         </button>
                         <span className="tooltip-container pointer-events-none">
                           <span className="fixed top-auto left-auto hidden group-hover:block bg-gray-800 text-white text-xs rounded py-2 px-4 whitespace-nowrap z-[100] shadow-lg">
@@ -222,23 +361,26 @@ export default function AnalysisHistory({ submissions = [] }: { submissions: Das
                       </div>
                     </div>
                   </td>
+                  {/* DATE CELL */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(submission.createdAt).toLocaleDateString()}
+                    {submission.submissionDate} {/* Render the pre-formatted date string */}
                   </td>
+                  {/* STATUS CELL */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(submission.status)}`}>{submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="text-lg mr-2">{getCategoryIcon(submission.categoryName, submission.isCompetitorProduct)}</div>
+                      <div className="text-lg mr-2">{getCategoryIcon(submission.categoryName, submission.isCompetitor)}</div>
                       <div className="ml-2">
-                        <div className="text-sm font-medium text-gray-900">{submission.productTitle}</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {submission.displayName ? submission.displayName : submission.productTitle}
+                        </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{submission.brandName}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{submission.categoryName}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{submission.isCompetitorProduct ? 'Competitor' : 'Your Product'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{submission.isCompetitor ? 'Competitor' : 'Your Product'}</td>
                 </tr>
               ))
             )}
@@ -262,78 +404,17 @@ export default function AnalysisHistory({ submissions = [] }: { submissions: Das
       </div>
       
       {/* Custom Confirmation Modal */}
-      <ConfirmationModal
+      <ConfirmationModal 
         isOpen={isDeleteModalOpen}
-        title="Delete Analysis"
-        message={selectedSubmission ? `Are you sure you want to delete the analysis for ${selectedSubmission.productTitle}?` : 'Are you sure you want to delete this analysis?'}
-        confirmText="Delete"
-        cancelText="Cancel"
-        type="danger"
-        position={modalPosition}
-        onConfirm={async () => {
-          if (selectedSubmission) {
-            try {
-              console.log('Deleting analysis for', selectedSubmission.id);
-              
-              // Create Supabase client
-              const supabase = createClient();
-              
-              // Delete the analysis from Supabase
-              const { error: deleteSubmissionError } = await supabase
-                .from('submissions')
-                .delete()
-                .eq('id', selectedSubmission.id);
-              
-              if (deleteSubmissionError) throw deleteSubmissionError;
-              
-              // If there's an associated analysis, delete that too
-              if (selectedSubmission.analysisId) {
-                const { error: deleteAnalysisError } = await supabase
-                  .from('analyses')
-                  .delete()
-                  .eq('id', selectedSubmission.analysisId);
-                
-                if (deleteAnalysisError) {
-                  console.error('Error deleting analysis record:', deleteAnalysisError);
-                  // Continue even if this fails, as the submission is already deleted
-                }
-                
-                // Delete any associated files in storage
-                const { error: deleteStorageError } = await supabase
-                  .storage
-                  .from('analysis-reports')
-                  .remove([`${selectedSubmission.id}/report.pdf`]);
-                
-                if (deleteStorageError) {
-                  console.error('Error deleting storage files:', deleteStorageError);
-                  // Continue even if this fails, as the main records are already deleted
-                }
-              }
-              
-              alert(`Analysis for ${selectedSubmission.productTitle} has been deleted.`);
-              // Refresh the submissions list
-              window.location.reload();
-              
-              // Close the modal
-              setIsDeleteModalOpen(false);
-              setSelectedSubmission(null);
-              setModalPosition(undefined);
-            } catch (error) {
-              console.error('Error deleting analysis:', error);
-              alert('Failed to delete analysis. Please try again.');
-              
-              // Close the modal
-              setIsDeleteModalOpen(false);
-              setSelectedSubmission(null);
-              setModalPosition(undefined);
-            }
-          }
-        }}
-        onCancel={() => {
+        onCancel={() => { 
           setIsDeleteModalOpen(false);
           setSelectedSubmission(null);
           setModalPosition(undefined);
         }}
+        onConfirm={handleDeleteConfirm}
+        title="Confirm Deletion"
+        message={`Are you sure you want to delete the analysis for "${selectedSubmission?.displayName || selectedSubmission?.productTitle}"? This action cannot be undone.`}
+        position={modalPosition}
       />
     </div>
   );

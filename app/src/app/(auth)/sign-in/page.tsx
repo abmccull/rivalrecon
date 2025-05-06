@@ -6,17 +6,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { 
-  faEnvelope, 
-  faLock, 
-  faEye, 
-  faEyeSlash, 
-  faChartLine, 
-  faShieldHalved, 
-  faCircleNotch 
+import {
+  faEnvelope,
+  faLock,
+  faEye,
+  faEyeSlash,
+  faChartLine,
+  faShieldHalved,
+  faCircleNotch
 } from '@fortawesome/free-solid-svg-icons';
-import { faGoogle, faMicrosoft } from '@fortawesome/free-brands-svg-icons';
+import { faGoogle } from '@fortawesome/free-brands-svg-icons';
 import { useAuth } from "@/components/layout/AuthProvider";
+import { createClient } from '@/lib/supabase/client';
 
 const schema = z.object({
   email: z.string().email({ message: "Invalid email address" }),
@@ -38,15 +39,16 @@ function getFriendlyErrorMessage(errorMessage: string): string {
 
 export default function SignInPage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
-  // No redirect logic here; AuthProvider handles it globally.
+  const { user, loading: authProviderLoading } = useAuth();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirect') || '/dashboard';
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const { signIn } = useAuth();
-  
+  const supabase = createClient();
+
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -60,14 +62,10 @@ export default function SignInPage() {
     console.log("Starting sign in process...");
     
     try {
-      // Use the AuthProvider's signIn method
       await signIn(data.email, data.password);
       
-      // The sign-in was successful, log the redirect destination
       console.log("Sign in successful, redirecting to:", redirectTo);
       
-      // Force a direct browser navigation - this ensures a full page refresh
-      // that will properly synchronize the session state with the middleware
       window.location.href = redirectTo;
     } catch (err: any) {
       console.error("Sign in error:", err);
@@ -77,9 +75,35 @@ export default function SignInPage() {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Google sign-in error:', err);
+      setError(err.message || 'Failed to initiate Google sign-in.');
+      setGoogleLoading(false);
+    }
+  };
+
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
+
+  if (authProviderLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <FontAwesomeIcon icon={faCircleNotch} className="animate-spin text-4xl text-[#2DD4BF]" />
+      </div>
+    );
+  }
 
   return (
     <div id="login-page" className="min-h-screen bg-[#F7FAFC] flex flex-col">
@@ -94,14 +118,18 @@ export default function SignInPage() {
             {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm mb-6">{error}</div>}
             
             <div id="social-login" className="space-y-3 mb-6">
-              <button type="button" className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-md py-3 px-4 text-gray-700 font-medium hover:bg-gray-50 transition-colors">
-                <FontAwesomeIcon icon={faGoogle} className="text-xl" />
+              <button 
+                type="button" 
+                onClick={handleGoogleSignIn} 
+                disabled={googleLoading || authLoading}
+                className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-md py-3 px-4 text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {googleLoading ? (
+                  <FontAwesomeIcon icon={faCircleNotch} className="animate-spin text-xl" />
+                ) : (
+                  <FontAwesomeIcon icon={faGoogle} className="text-xl" />
+                )}
                 <span>Sign in with Google</span>
-              </button>
-              
-              <button type="button" className="w-full flex items-center justify-center gap-3 border border-gray-300 rounded-md py-3 px-4 text-gray-700 font-medium hover:bg-gray-50 transition-colors">
-                <FontAwesomeIcon icon={faMicrosoft} className="text-xl" />
-                <span>Sign in with Microsoft</span>
               </button>
             </div>
             
@@ -174,7 +202,7 @@ export default function SignInPage() {
                 <div>
                   <button
                     type="submit"
-                    disabled={authLoading}
+                    disabled={authLoading || googleLoading}
                     className="w-full bg-[#2DD4BF] text-white py-3 px-4 rounded-md font-medium hover:bg-opacity-90 transform hover:scale-[1.02] transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2DD4BF] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center"
                   >
                     {authLoading ? (
@@ -209,7 +237,7 @@ export default function SignInPage() {
         <div className="container mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="mb-4 md:mb-0">
-              <p className="text-gray-500 text-sm">© {new Date().getFullYear()} RivalRecon. All rights reserved.</p>
+              <p className="text-gray-500 text-sm"> {new Date().getFullYear()} RivalRecon. All rights reserved.</p>
             </div>
             <div className="flex space-x-6">
               <span className="text-gray-500 hover:text-[#2DD4BF] text-sm cursor-pointer">Terms of Service</span>
@@ -221,4 +249,4 @@ export default function SignInPage() {
       </footer>
     </div>
   );
-} 
+}

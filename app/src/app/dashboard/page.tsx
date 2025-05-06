@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { getRecentSubmissions, getDashboardMetrics, getRecentInsights } from '@/lib/dashboard';
+import { getRecentSubmissions, getDashboardMetrics, getRecentInsights, getMonthlyUsage } from '@/lib/dashboard';
 import { redirect } from 'next/navigation';
 
 // Import client components
@@ -9,6 +9,7 @@ import AnalysisHistory from '@/components/dashboard/AnalysisHistory';
 import QuickStats from '@/components/dashboard/QuickStats';
 import RecentInsights from '@/components/dashboard/RecentInsights';
 import DashboardHeader from '@/components/layout/DashboardHeader';
+import UsageCounter from '@/components/dashboard/UsageCounter';
 
 export default async function DashboardPage() {
   // Get Supabase client
@@ -21,9 +22,36 @@ export default async function DashboardPage() {
   }
   
   // Fetch real data from Supabase
-  const submissions = await getRecentSubmissions(supabase);
-  const metrics = await getDashboardMetrics(supabase);
-  const insights = await getRecentInsights(supabase);
+  const submissionsResponse = await getRecentSubmissions();
+  const metricsResponse = await getDashboardMetrics();
+  const usageResponse = await getMonthlyUsage();
+  
+  // Ensure responses are properly typed and handle errors
+  const submissions = Array.isArray(submissionsResponse) ? submissionsResponse : [];
+  const metrics = typeof metricsResponse === 'object' && metricsResponse !== null ? metricsResponse : {
+    totalSubmissions: 0,
+    pendingSubmissions: 0,
+    completedSubmissions: 0,
+    totalCompetitorsTracked: 0,
+    totalReviewsAnalyzed: 0
+  };
+  
+  // Ensure insights is always an array before passing to components
+  const insightsResponse = await getRecentInsights();
+  const insights = Array.isArray(insightsResponse) ? insightsResponse : [];
+  
+  // Error handling without console logging
+  // Silently handle error responses without logging to console
+  
+  // Process usage data
+  const usageData = typeof usageResponse === 'object' && usageResponse !== null
+    ? usageResponse
+    : { 
+        used: 0, 
+        limit: 20, 
+        renewalDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toISOString().split('T')[0],
+        isUnlimited: false 
+      };
   
   return (
     <div className="bg-[#F7FAFC] min-h-screen">
@@ -45,6 +73,16 @@ export default async function DashboardPage() {
             
             {/* Right Column - Analysis History & Quick Stats */}
             <div className="lg:col-span-2">
+              {/* Monthly Usage Counter */}
+              <div className="mb-6">
+                <UsageCounter 
+                  used={usageData.used} 
+                  limit={usageData.limit} 
+                  renewalDate={usageData.renewalDate}
+                  isUnlimited={usageData.isUnlimited} 
+                />
+              </div>
+              
               <div className="mb-10">
                 <AnalysisHistory submissions={submissions} />
               </div>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { DashboardSubmission } from '@/lib/dashboard';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import { createClient } from '@/lib/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
 interface FullAnalysisTableProps {
   submissions: DashboardSubmission[];
@@ -17,52 +18,55 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedSubmission, setSelectedSubmission] = useState<DashboardSubmission | null>(null);
   const [modalPosition, setModalPosition] = useState({ x: 0, y: 0 });
-  
+  const [isRefreshing, setIsRefreshing] = useState<string | null>(null);
+  const { toast } = useToast();
+
   // Filter submissions based on search term
   const filteredSubmissions = submissions.filter(submission => {
     const searchTermLower = searchTerm.toLowerCase();
     return (
       submission.productTitle.toLowerCase().includes(searchTermLower) ||
+      (submission.displayName && submission.displayName.toLowerCase().includes(searchTermLower)) ||
       submission.brandName.toLowerCase().includes(searchTermLower) ||
       submission.categoryName.toLowerCase().includes(searchTermLower) ||
-      (submission.competitorName && submission.competitorName.toLowerCase().includes(searchTermLower)) ||
+      (submission.isCompetitor ? 'competitor' : 'your product').includes(searchTermLower) ||
       submission.status.toLowerCase().includes(searchTermLower)
     );
   });
-  
+
   // Calculate pagination
   const totalPages = Math.ceil(filteredSubmissions.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filteredSubmissions.slice(indexOfFirstItem, indexOfLastItem);
-  
+
   // Handle pagination
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
   const nextPage = () => setCurrentPage(prev => Math.min(prev + 1, totalPages));
   const prevPage = () => setCurrentPage(prev => Math.max(prev - 1, 1));
-  
+
   // Handle delete confirmation
   const handleDeleteClick = (submission: DashboardSubmission, event: React.MouseEvent) => {
     setSelectedSubmission(submission);
     setModalPosition({ x: event.clientX, y: event.clientY });
     setIsDeleteModalOpen(true);
   };
-  
+
   // Handle delete action
   const handleDelete = async () => {
     if (!selectedSubmission) return;
-    
+
     try {
       const supabase = createClient();
-      
+
       // Delete the submission from Supabase
       const { error } = await supabase
         .from('submissions')
         .delete()
         .eq('id', selectedSubmission.id);
-      
+
       if (error) throw error;
-      
+
       // Close modal and refresh page
       setIsDeleteModalOpen(false);
       window.location.reload();
@@ -71,7 +75,64 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
       alert('Failed to delete submission. Please try again.');
     }
   };
-  
+
+  // Handle refresh action
+  const handleRefresh = async (submissionToRefresh: DashboardSubmission) => {
+    // Extract necessary info from the submission object
+    const originalSubmissionId = submissionToRefresh.id;
+    const productTitle = submissionToRefresh.productTitle || submissionToRefresh.displayName || 'Unknown Product';
+    const url = submissionToRefresh.url; // Assume url is available on DashboardSubmission
+    const asin = submissionToRefresh.asin;
+
+    if (isRefreshing || !url) return; // Prevent multiple clicks or if URL is missing
+    setIsRefreshing(originalSubmissionId);
+
+    try {
+      const supabase = createClient();
+      
+      // Get current user for the new record
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      // Create a new submission record for the refresh
+      const { error } = await supabase
+        .from('submissions')
+        .insert({
+          url: url,                     // Original URL
+          user_id: user.id,             // Current user
+          status: 'pending',              // Mark as pending for backend
+          refresh_parent_id: originalSubmissionId, // Link to original
+          product_title: productTitle,   // Copy title
+          asin: asin                   // Copy ASIN if available
+        });
+
+      if (error) {
+        console.error('Supabase insert error:', error);
+        throw new Error(`Supabase error: ${error.message}`);
+      }
+
+      toast({
+        title: "Refresh Queued",
+        description: `Analysis refresh added to the queue for ${productTitle}.`,
+        variant: "default",
+        className: "bg-blue-100/10 border-blue-500/20 text-[#1F2937]"
+      });
+      
+      // No reload needed
+      // window.location.reload(); 
+
+    } catch (error) {
+      console.error('Error queuing refresh:', error);
+      toast({ 
+        title: "Refresh Failed",
+        description: `Could not add refresh to queue. ${error instanceof Error ? error.message : 'Please try again.'}`,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshing(null); 
+    }
+  };
+
   // Helper function to get status color
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -89,12 +150,12 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
         return 'bg-gray-100 text-gray-800';
     }
   };
-  
+
   // Helper function to get category icon
   const getCategoryIcon = (category: string, isCompetitor: boolean) => {
     // Default icon
     let icon = '📦';
-    
+
     // Category-specific icons
     switch (category.toLowerCase()) {
       case 'electronics':
@@ -128,10 +189,10 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
         icon = '💊';
         break;
     }
-    
+
     return icon;
   };
-  
+
   return (
     <div>
       <div className="px-4 py-5 sm:px-6 flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
@@ -168,7 +229,7 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
           </div>
         </div>
       </div>
-      
+
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -212,7 +273,7 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
                       {/* View button */}
                       <div className="relative group">
                         <Link 
-                          href={submission.analysisId ? `/reports/${submission.analysisId}` : `/reports/${submission.id}`} 
+                          href={`/reports/${submission.id}`}
                           className="text-blue-600 hover:text-blue-900"
                         >
                           <span className="text-lg">👁️</span>
@@ -221,7 +282,7 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
                           View Analysis
                         </div>
                       </div>
-                      
+
                       {/* Download button */}
                       <div className="relative group">
                         <button 
@@ -238,38 +299,17 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
                           Download Report
                         </div>
                       </div>
-                      
+
                       {/* Refresh button */}
-                      <div className="relative group">
-                        <button 
-                          className="text-purple-600 hover:text-purple-900"
-                          onClick={async () => {
-                            try {
-                              const supabase = createClient();
-                              
-                              // Update the status to 'refreshing'
-                              const { error } = await supabase
-                                .from('submissions')
-                                .update({ status: 'refreshing' })
-                                .eq('id', submission.id);
-                              
-                              if (error) throw error;
-                              
-                              // Reload the page to show updated status
-                              window.location.reload();
-                            } catch (error) {
-                              console.error('Error refreshing analysis:', error);
-                              alert('Failed to refresh analysis. Please try again.');
-                            }
-                          }}
-                        >
-                          <span className="text-lg">🔄</span>
-                        </button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap z-10">
-                          Refresh Analysis
-                        </div>
-                      </div>
-                      
+                      <button 
+                        className="p-1 rounded-md text-gray-500 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mx-1"
+                        onClick={() => handleRefresh(submission)} // Pass the whole submission
+                        disabled={isRefreshing === submission.id || submission.status === 'pending' || submission.status === 'processing' || submission.status === 'refreshing'}
+                        aria-label={isRefreshing === submission.id ? "Refreshing analysis" : "Refresh analysis"}
+                      >
+                        <span className="text-lg">{isRefreshing === submission.id ? '⏳' : '🔄'}</span>
+                      </button>
+
                       {/* Delete button */}
                       <div className="relative group">
                         <button 
@@ -284,46 +324,46 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
                       </div>
                     </div>
                   </td>
-                  
+
                   {/* DATE COLUMN */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(submission.createdAt).toLocaleDateString()}
+                    {new Date(submission.submissionDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) || 'No date'}
                   </td>
-                  
+
                   {/* STATUS COLUMN */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(submission.status)}`}>
                       {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
                     </span>
                   </td>
-                  
+
                   {/* PRODUCT COLUMN */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="text-lg mr-2">
-                        {getCategoryIcon(submission.categoryName, submission.isCompetitorProduct)}
+                        {getCategoryIcon(submission.categoryName, submission.isCompetitor)}
                       </div>
                       <div className="ml-2">
                         <div className="text-sm font-medium text-gray-900">
-                          {submission.productTitle}
+                          {submission.displayName || submission.productTitle}
                         </div>
                       </div>
                     </div>
                   </td>
-                  
+
                   {/* BRAND COLUMN */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {submission.brandName}
                   </td>
-                  
+
                   {/* CATEGORY COLUMN */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {submission.categoryName}
                   </td>
-                  
+
                   {/* TYPE COLUMN */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {submission.isCompetitorProduct ? 'Competitor' : 'Your Product'}
+                    {submission.isCompetitor ? 'Competitor' : 'Your Product'}
                   </td>
                 </tr>
               ))
@@ -331,13 +371,13 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
           </tbody>
         </table>
       </div>
-      
+
       {/* Pagination controls */}
       <div className="px-4 py-5 sm:px-6 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
         <div className="text-sm text-gray-500">
           Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredSubmissions.length)} of {filteredSubmissions.length} reports
         </div>
-        
+
         <div className="flex items-center space-x-2">
           <button 
             onClick={prevPage}
@@ -347,7 +387,7 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
           >
             <span className="text-sm">←</span>
           </button>
-          
+
           <div className="flex items-center space-x-1">
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               // Logic to show pages around current page
@@ -361,7 +401,7 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
               } else {
                 pageNum = currentPage - 2 + i;
               }
-              
+
               return (
                 <button
                   key={pageNum}
@@ -376,7 +416,7 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
                 </button>
               );
             })}
-            
+
             {totalPages > 5 && currentPage < totalPages - 2 && (
               <>
                 <span className="text-gray-500">...</span>
@@ -389,7 +429,7 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
               </>
             )}
           </div>
-          
+
           <button 
             onClick={nextPage}
             disabled={currentPage === totalPages || totalPages === 0}
@@ -400,12 +440,12 @@ export default function FullAnalysisTable({ submissions }: FullAnalysisTableProp
           </button>
         </div>
       </div>
-      
+
       {/* Custom Confirmation Modal */}
       <ConfirmationModal
         isOpen={isDeleteModalOpen}
         title="Delete Analysis"
-        message={selectedSubmission ? `Are you sure you want to delete the analysis for ${selectedSubmission.productTitle}?` : 'Are you sure you want to delete this analysis?'}
+        message={selectedSubmission ? `Are you sure you want to delete the analysis for ${selectedSubmission.displayName || selectedSubmission.productTitle}?` : 'Are you sure you want to delete this analysis?'}
         confirmText="Delete"
         cancelText="Cancel"
         type="danger"

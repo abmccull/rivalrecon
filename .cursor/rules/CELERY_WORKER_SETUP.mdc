@@ -1,0 +1,140 @@
+# RivalRecon Celery Worker Setup Guide
+
+This document outlines the proper configuration, initialization, and management of the Celery worker for the RivalRecon application. Following these guidelines ensures that tasks are properly processed and the worker integrates correctly with the Node.js backend.
+
+## Prerequisites
+
+- Python 3.9+ with virtualenv
+- Redis server running locally on port 6379 (or configured via environment variables)
+- Node.js backend configured to queue tasks to Redis
+- Supabase project credentials
+
+## Directory Structure
+
+The Celery worker code is organized as follows:
+
+```
+/Rival Recon3/
+├── .env                  # Master environment variables file (at project root)
+├── backend/
+│   ├── worker/
+│   │   ├── celery_app.py        # Celery application configuration
+│   │   ├── tasks.py             # Task definitions
+│   │   ├── recurring_scheduler.py # Scheduled task management
+│   │   └── worker.py            # Worker initialization (optional)
+```
+
+## Environment Variables
+
+The Celery worker requires the following environment variables, which should be defined in the **project root** `.env` file:
+
+```
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+DEEPSEEK_API_KEY=your-deepseek-api-key
+RAPIDAPI_KEY=your-rapidapi-key
+```
+
+## Starting the Celery Worker
+
+To properly start the Celery worker, follow these steps:
+
+1. Activate the virtual environment:
+   ```bash
+   cd /Users/abmccull/Rival Recon3/backend
+   source venv/bin/activate
+   ```
+
+2. Set the Python path and start the worker:
+   ```bash
+   PYTHONPATH=/Users/abmccull/Rival Recon3 celery -A worker.celery_app.app worker --loglevel=info
+   ```
+
+The `PYTHONPATH` ensures Python can find modules in the project root, and the `-A worker.celery_app.app` argument points to the Celery app instance.
+
+## Starting Celery Beat (for Scheduled Tasks)
+
+If you're using scheduled tasks (like `run_midnight_scheduler`), start Celery Beat alongside the worker:
+
+```bash
+PYTHONPATH=/Users/abmccull/Rival Recon3 celery -A worker.celery_app.app beat --loglevel=info
+```
+
+Or run both worker and beat in a single process:
+
+```bash
+PYTHONPATH=/Users/abmccull/Rival Recon3 celery -A worker.celery_app.app worker --beat --loglevel=info
+```
+
+## Key Components
+
+### 1. celery_app.py
+
+This file defines the Celery application instance and configuration. It:
+- Loads environment variables from the project root `.env` file
+- Configures the broker and result backend
+- Sets up scheduled tasks via `app.conf.beat_schedule`
+- Includes task modules for discovery
+
+### 2. tasks.py
+
+Contains task definitions using the `@shared_task` decorator, such as:
+- `scrape_product_reviews`: Processes URLs for product review scraping
+- `analyze_reviews`: Performs sentiment analysis using DeepSeek API
+- `refresh_submission`: Refreshes existing analyses with new data
+
+### 3. recurring_scheduler.py
+
+Manages scheduled tasks that should run periodically, like:
+- `run_midnight_scheduler`: Processes recurring analyses due to run that day
+
+## Task Queuing from Node.js
+
+The Node.js backend queues tasks as follows:
+
+1. Creates a Celery-compatible message
+2. Uses the task name format `worker.scrape_reviews` (correspond to Python task names)
+3. Sends to Redis using RPUSH to the "celery" queue
+4. Includes submission IDs as task arguments
+
+## Troubleshooting
+
+### Common Issues
+
+1. **ImportError for modules**:
+   - Ensure PYTHONPATH is set correctly
+   - Check that all required modules are importable
+
+2. **Environment variables not found**:
+   - Verify `.env` file exists in the project root
+   - Confirm environment loading in celery_app.py is pointing to the correct path
+
+3. **Supabase connection errors**:
+   - Check that SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are correct
+   - Ensure variable names match between `.env` file and code references
+
+4. **Redis connection errors**:
+   - Verify Redis is running (`redis-server`)
+   - Check CELERY_BROKER_URL points to the correct Redis instance
+
+## Best Practices
+
+1. Always load environment variables **before** imports that might use them
+2. Keep Celery app configuration in a separate module (celery_app.py)
+3. Use relative imports within the worker package
+4. Set appropriate logging levels for different environments
+5. Use task names consistently between Python and Node.js
+
+## Task Execution Flow
+
+1. Node.js backend queues tasks to Redis
+2. Celery worker picks up tasks from Redis
+3. Worker executes the appropriate task function
+4. Results are stored in Supabase and/or Redis result backend
+5. Status is updated for the submission
+
+---
+
+This document was last updated on: May 1, 2025

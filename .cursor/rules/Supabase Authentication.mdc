@@ -37,11 +37,39 @@ Row Level Security (RLS)
 *   **Implementation**: Enable RLS on all database tables to control access based on the authenticated user's ID.
 *   **Access Control**: Restrict access to rows by matching `user_id` with `auth.uid()` from the session context (available in backend API calls and Supabase client sessions).
 
-### 3. Application Components
+### 3. Production Environment Best Practices
+
+*   **Logging and Debugging**:
+    *   Remove all debug and console logging statements from production code, especially those that might expose sensitive user data.
+    *   Retain only critical error logs that aid in troubleshooting server-side issues without exposing user information.
+    *   Use structured logging in production with proper error handling that doesn't reveal implementation details.
+
+*   **Error Handling**:
+    *   Implement comprehensive error boundaries in React components to gracefully handle failures.
+    *   Provide user-friendly error messages instead of exposing technical details.
+    *   Always validate user input server-side regardless of client-side validation.
+
+*   **Security Considerations**:
+    *   Never store authentication tokens or sensitive user data in localStorage or sessionStorage.
+    *   Implement proper CSRF protection using Supabase's built-in token rotation mechanisms.
+    *   Set appropriate cookie security attributes (Secure, HttpOnly, SameSite) in production environments.
+    *   Rate-limit authentication endpoints to prevent brute force attacks.
+
+*   **Mock Data**:
+    *   Never use mock data in production environments.
+    *   Implement proper error states and loading indicators for when real data is unavailable.
+    *   Create proper empty states for components instead of falling back to fake data.
+
+### 4. Application Components
 
 Frontend (Next.js)
 
-*   **Library**: Use `@supabase/supabase-js`, potentially with helper libraries like `@supabase/auth-helpers-nextjs` or custom client/server instances.
+*   **Library**: Use `@supabase/supabase-js` with the official `@supabase/ssr` package (which replaces the deprecated `@supabase/auth-helpers-nextjs`).
+
+*   **Cookie Handling**:
+    *   Always `await` the `cookies()` function in server components and API routes.
+    *   Use the `CookieOptions` type from `@supabase/ssr` for proper type safety.
+    *   Never expose cookie values or session tokens in client-side code or console logs.
 
 *   **Functionality**:
 
@@ -92,7 +120,7 @@ Environment Variables
 
 Supabase Client Integration (Next.js)
 
-*   **Initialization**: Set up Supabase client instances for browser (client components) and server-side (server components, middleware, API routes) contexts. Consider using `@supabase/auth-helpers-nextjs` wrappers or manual setup.
+*   **Initialization**: Set up Supabase client instances for browser (client components) and server-side (server components, middleware, API routes) contexts using the `@supabase/ssr` package. Use `createBrowserClient` for client components and `createServerClient` for server components, middleware, and API routes.
 *   **Session Management**: Leverage Supabase's cookie-based session handling, integrated with Next.js middleware/server components for seamless auth state persistence and validation.
 
 ### 5. Strict Rules for Implementation
@@ -147,7 +175,90 @@ Session Challenges
     *   Ensure `onAuthStateChange` listener is correctly updating client-side state.
     *   Test sign-out properly clears cookies and client state.
 
-### 7. Validation Checklist
+### 7. Client/Server Implementation Structure
+
+Project Structure
+
+*   **Client-Side Integration**:
+    * Create a utility file at `src/lib/supabase/client.ts` that implements the client-side Supabase instance using `createBrowserClient` from `@supabase/ssr`.
+    * Example implementation:
+    ```typescript
+    "use client";
+    import { createBrowserClient } from '@supabase/ssr';
+    
+    export const createClient = () => {
+      return createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+    };
+    ```
+
+*   **Server-Side Integration**:
+    * Create a utility file at `src/lib/supabase/server.ts` that implements the server-side Supabase instance using `createServerClient` from `@supabase/ssr`.
+    * Example implementation:
+    ```typescript
+    import { cookies } from 'next/headers';
+    import { createServerClient } from '@supabase/ssr';
+    
+    export const createClient = () => {
+      const cookieStore = cookies();
+      
+      return createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            get(name: string) {
+              return cookieStore.get(name)?.value;
+            },
+            set(name: string, value: string, options: any) {
+              cookieStore.set({ name, value, ...options });
+            },
+            remove(name: string, options: any) {
+              cookieStore.set({ name, value: '', ...options });
+            },
+          },
+        }
+      );
+    };
+    ```
+
+*   **Middleware Implementation**:
+    * Implement middleware at `src/middleware.ts` using `createServerClient` from `@supabase/ssr` for route protection.
+    * Example implementation:
+    ```typescript
+    import { createServerClient } from '@supabase/ssr';
+    import { NextResponse, type NextRequest } from 'next/server';
+    
+    export async function middleware(request: NextRequest) {
+      const response = NextResponse.next();
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            get(name: string) {
+              return request.cookies.get(name)?.value;
+            },
+            set(name: string, value: string, options: any) {
+              request.cookies.set({ name, value, ...options });
+              response.cookies.set({ name, value, ...options });
+            },
+            remove(name: string, options: any) {
+              request.cookies.delete(name);
+              response.cookies.delete(name);
+            },
+          },
+        }
+      );
+      
+      await supabase.auth.getSession();
+      return response;
+    };
+    ```
+
+### 8. Validation Checklist
 
 Authentication Features
 

@@ -72,7 +72,7 @@ class DeepSeekService {
     const ratings = reviews.map(review => parseFloat(review.review_rating) || 0);
     const averageRating = (ratings.reduce((sum, rating) => sum + rating, 0) / reviewCount).toFixed(1);
 
-    return `Analyze the following ${reviewCount} product reviews for "${metadata.product_name}" by ${metadata.brand || 'Unknown Brand'} in the ${metadata.category || 'Unknown'} category.
+    return `You are an AI assistant tasked with analyzing product reviews to generate structured insights for RivalRecon, a competitive intelligence platform. Your goal is to process the following ${reviewCount} product reviews, aggregate the data, and extract meaningful insights that drive actionable intelligence.
 
 Product Overview:
 - Product Name: ${metadata.product_name}
@@ -85,72 +85,84 @@ Product Overview:
 Reviews:
 ${reviewTexts}
 
-Please provide a comprehensive analysis including:
+Please provide a complete analysis with ALL fields formatted EXACTLY as specified below. This is CRITICAL for our database structure and frontend display.
 
-1. Overall review metrics and sentiment breakdown
-2. Key themes and topics mentioned in reviews
-3. Keywords with their frequency and sentiment
-4. Product features mentioned with sentiment breakdown
-5. Trends in ratings and sentiment over time
-6. Representative review examples for each sentiment category
-7. Key insights derived from reviews
-8. Specific improvement opportunities based on review feedback
-9. A concise, readable display name for the product (maximum 5 words)
-${metadata.is_competitor_product ? '10. Competitive analysis comparing this product to our own offerings' : ''}
+## REQUIRED OUTPUT FORMAT
 
-The display name should be a simplified version of the product name that captures the essence of what the product is. Remove any unnecessary words like "premium", "authentic", "professional" etc. Avoid including brand names, sizes, counts, or measurements in the display name.
+### Essential Fields (MUST be included with proper formatting)
 
-Format the response as a JSON object with the following structure:
+1. rating_distribution: JSON object with star ratings as keys and exact review counts as values
+   Format: {"1": n, "2": n, "3": n, "4": n, "5": n}
+   IMPORTANT: Use simple numeric keys ("1", "2", etc.) NOT "1_star" or other formats
+
+2. review_count: Integer representing total number of reviews analyzed
+   Format: 75
+   IMPORTANT: Must equal the sum of values in rating_distribution
+
+3. average_rating: Decimal number (to 1 decimal place) representing average rating
+   Format: 4.2
+   IMPORTANT: Calculate as (sum of all star ratings) / review_count
+
+4. sentiment_score: Decimal between 0-1, with 1 being most positive
+   Format: 0.82
+   IMPORTANT: Compute based on review text sentiment and star distribution
+
+### Content Analysis Fields
+
+5. top_positives: JSON array of strongest positive points, ordered by frequency/importance
+   Format: ["Excellent hydration benefits", "Great taste", "Convenient packaging"]
+
+6. top_negatives: JSON array of most mentioned complaints/issues
+   Format: ["Dissolves slowly", "Expensive for quantity", "Inconsistent flavor"]
+
+7. word_map: JSON object with keywords and their frequency counts
+   Format: {"hydration": 45, "flavor": 30, "price": 25}
+
+8. trending: Brief summary of rating patterns and key issues
+   Format: "Ratings improved in recent months with better feedback on taste and packaging."
+
+9. opportunities: JSON array of actionable improvement suggestions
+   Format: ["Improve dissolution speed", "Offer bulk discounts", "Enhance flavor"]
+
+10. competitive_insights: JSON array of comparisons to competitors
+    Format: ["Users prefer our hydration benefits over Brand X", "Competitor Y has better pricing"]
+
+11. key_themes: JSON array of main topics discussed in reviews
+    Format: ["hydration", "flavor", "price", "packaging"]
+
+12. display_name: Concise product title under 100 characters
+    Format: "Nuun Electrolyte Tablets - Hydration Supplements"
+
+## CRITICAL FORMAT REQUIREMENTS
+
+1. ALL numeric fields must be native numbers, not strings
+2. ALL JSON fields must use valid JSON syntax with double quotes for keys and string values
+3. rating_distribution MUST use the format {"1": n, "2": n, "3": n, "4": n, "5": n} with simple numeric keys
+4. review_count MUST match the sum of all values in rating_distribution
+5. Include ALL fields in your response, even with minimal data (empty arrays, zeros) if necessary
+6. Do not omit any fields or change their names/formats
+
+The complete response should be a valid JSON object matching this structure:
 {
-  "display_name": string,                     // A concise, readable product name (max 5 words)
-  "sentiment_score": number,                  // Overall sentiment score (0-100 scale)
-  "sentiment_distribution": {                 // Percentage breakdown of sentiment
-    "positive": number,                       // Percentage of positive sentiment (0-100)
-    "neutral": number,                        // Percentage of neutral sentiment (0-100)
-    "negative": number                        // Percentage of negative sentiment (0-100)
-  },
-  "keywords": [                               // Array of important keywords from reviews
-    {
-      "text": string,                         // Keyword text
-      "value": number,                        // Frequency or importance value
-      "sentiment": "positive"|"neutral"|"negative" // Sentiment association
-    }
-  ],
-  "product_features": [                       // Product features mentioned in reviews
-    {
-      "feature": string,                      // Feature name
-      "mention_count": number,                // How often feature is mentioned
-      "positive_count": number,               // Count of positive mentions
-      "negative_count": number,               // Count of negative mentions
-      "neutral_count": number                 // Count of neutral mentions
-    }
-  ],
-  "ratings_over_time": [                      // Time series data (group by month)
-    {
-      "date": string,                         // Format: YYYY-MM-DD
-      "average_rating": number,               // Average rating for period
-      "review_count": number,                 // Number of reviews in period
-      "sentiment_positive": number,           // Percentage of positive reviews
-      "sentiment_neutral": number,            // Percentage of neutral reviews
-      "sentiment_negative": number            // Percentage of negative reviews
-    }
-  ],
-  "rating_distribution": {                    // Distribution of star ratings
-    "1_star": number,                         // Count of 1-star reviews
-    "2_star": number,                         // Count of 2-star reviews
-    "3_star": number,                         // Count of 3-star reviews
-    "4_star": number,                         // Count of 4-star reviews
-    "5_star": number                          // Count of 5-star reviews
-  },
-  "key_insights": string[],                   // Array of key insights from reviews
-  "improvement_opportunities": string[],      // Array of specific improvement suggestions
-  "review_text_sample": string[],             // Representative review excerpts (5-8)
-  "top_positives": string[],                  // Top positive aspects mentioned
-  "top_negatives": string[],                  // Top negative aspects mentioned
-  ${metadata.is_competitor_product ? '"competitive_advantages": string[], // Advantages compared to our products\n  "competitive_disadvantages": string[], // Disadvantages compared to our products' : ''}
-}
-
-IMPORTANT: Every field in the above structure is required. Do not omit any fields. If there is not enough data to populate a field, use minimal valid values (empty arrays for arrays, 0 for numbers, empty objects for objects) but include all fields.`;
+  "display_name": string,                  // Concise product title under 100 chars
+  "sentiment_score": number,               // Overall sentiment (0-1 scale)
+  "word_map": object,                      // Keywords with frequency counts
+  "top_positives": string[],               // Array of positive aspects
+  "top_negatives": string[],               // Array of negative aspects
+  "trending": string,                      // Brief trend summary
+  "opportunities": string[],               // Improvement suggestions
+  "competitive_insights": string[],        // Competitor comparisons
+  "key_themes": string[],                  // Main topics discussed
+  "review_count": number,                  // EXACT total reviews analyzed
+  "average_rating": number,                // Average star rating (1 decimal)
+  "rating_distribution": {                 // Distribution of star ratings
+    "1": number,                           // Count of 1-star reviews
+    "2": number,                           // Count of 2-star reviews
+    "3": number,                           // Count of 3-star reviews
+    "4": number,                           // Count of 4-star reviews
+    "5": number                            // Count of 5-star reviews
+  }
+}`;
   }
 
   /**
@@ -180,14 +192,15 @@ IMPORTANT: Every field in the above structure is required. Do not omit any field
     const requiredFields = [
       'display_name',
       'sentiment_score',
-      'sentiment_distribution',
-      'keywords',
-      'product_features',
+      'word_map',
+      'key_themes',
       'key_insights',
       'improvement_opportunities',
-      'review_text_sample',
       'top_positives',
-      'top_negatives'
+      'top_negatives',
+      'rating_distribution',
+      'review_count',
+      'average_rating'
     ];
     
     // Check for required fields
@@ -197,21 +210,107 @@ IMPORTANT: Every field in the above structure is required. Do not omit any field
       }
     }
     
-    // Truncate large arrays to avoid database size issues
+    // Validate and format insight fields to ensure they're proper arrays of strings
+    // These fields are critical for both report pages and dashboard insights
+    const insightFields = ['top_positives', 'top_negatives', 'key_insights', 'improvement_opportunities'];
+    
+    insightFields.forEach(field => {
+      // Check if field exists but is not in the right format
+      if (data[field] !== undefined) {
+        // If it's a JSON string, parse it
+        if (typeof data[field] === 'string') {
+          try {
+            data[field] = JSON.parse(data[field]);
+          } catch (error) {
+            // If parsing fails, wrap the string in an array
+            data[field] = [data[field]];
+            console.log(`Converted string ${field} to array:`, data[field]);
+          }
+        }
+        
+        // If it's not an array at this point, convert it to one
+        if (!Array.isArray(data[field])) {
+          // Special handling for objects - use values or convert to array of strings
+          if (typeof data[field] === 'object' && data[field] !== null) {
+            data[field] = Object.values(data[field]);
+          } else {
+            data[field] = [String(data[field])];
+          }
+          console.log(`Converted non-array ${field} to array:`, data[field]);
+        }
+        
+        // Ensure each item in the array is a string
+        data[field] = data[field].map(item => {
+          if (typeof item === 'string') return item;
+          if (typeof item === 'object' && item !== null) {
+            // If it's an object with a text/content property, use that
+            if (item.text) return item.text;
+            if (item.content) return item.content;
+            // Otherwise stringify it
+            return JSON.stringify(item);
+          }
+          return String(item);
+        });
+        
+        // Trim the array to a reasonable size
+        const maxItems = 15;
+        if (data[field].length > maxItems) {
+          data[field] = data[field].slice(0, maxItems);
+        }
+        
+        // Log sample of the processed field for debugging
+        console.log(`Processed ${field} (first item):`, 
+          data[field].length > 0 ? data[field][0] : 'No items');
+      }
+    });
+    
+    // Validate rating_distribution format
+    if (data.rating_distribution) {
+      // Convert 1_star format to simple numeric keys if needed
+      const newDistribution = {};
+      const originalKeys = Object.keys(data.rating_distribution);
+      
+      originalKeys.forEach(key => {
+        // Extract the numeric part if key is in format like '1_star'
+        const numericKey = key.match(/^(\d+)/) ? key.match(/^(\d+)/)[1] : key;
+        // Use the numericKey (1, 2, etc.) as the new key
+        newDistribution[numericKey] = data.rating_distribution[key];
+      });
+      
+      data.rating_distribution = newDistribution;
+      console.log('Processed rating_distribution:', data.rating_distribution);
+    }
+    
+    // Ensure review_count is a number
+    if (data.review_count !== undefined) {
+      data.review_count = Number(data.review_count);
+      // Verify it's not NaN
+      if (isNaN(data.review_count)) data.review_count = 0;
+    }
+    
+    // Ensure average_rating is a number with one decimal
+    if (data.average_rating !== undefined) {
+      data.average_rating = Number(parseFloat(data.average_rating).toFixed(1));
+      // Verify it's not NaN
+      if (isNaN(data.average_rating)) data.average_rating = 0.0;
+    }
+    
+    // Handle word_map format - ensure it's an object with string keys and number values
+    if (typeof data.word_map === 'object' && data.word_map !== null) {
+      const formattedWordMap = {};
+      Object.entries(data.word_map).forEach(([key, value]) => {
+        formattedWordMap[String(key)] = Number(value) || 0;
+      });
+      data.word_map = formattedWordMap;
+    }
+    
+    // Truncate other large arrays to avoid database size issues
     if (data.keywords && data.keywords.length > 100) {
       data.keywords = data.keywords.slice(0, 100);
     }
     
     if (data.product_features && data.product_features.length > 30) {
       data.product_features = data.product_features.slice(0, 30);
-    }
-    
-    if (data.key_insights && data.key_insights.length > 15) {
-      data.key_insights = data.key_insights.slice(0, 15);
-    }
-    
-    if (data.improvement_opportunities && data.improvement_opportunities.length > 15) {
-      data.improvement_opportunities = data.improvement_opportunities.slice(0, 15);
     }
     
     if (data.review_text_sample && data.review_text_sample.length > 10) {
@@ -222,6 +321,10 @@ IMPORTANT: Every field in the above structure is required. Do not omit any field
     if (!data.average_rating && data.average_score) {
       data.average_rating = data.average_score;
     }
+    
+    // Log overall processing results for key fields
+    console.log('DeepSeek response processed successfully');
+    console.log('Fields processed: top_positives, top_negatives, key_insights, rating_distribution, etc.');
     
     return data;
   }

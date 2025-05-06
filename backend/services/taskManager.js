@@ -22,9 +22,10 @@ class TaskManager {
    * @param {string} taskName - Name of the task 
    * @param {Array} args - Task arguments
    * @param {Object} kwargs - Task keyword arguments
+   * @param {Object} [linkSignature=null] - Optional signature of a task to link upon success.
    * @returns {Object} - Task ID and stringified message
    */
-  createTaskMessage(taskName, args = [], kwargs = {}, taskId = uuidv4()) {
+  createTaskMessage(taskName, args = [], kwargs = {}, taskId = uuidv4(), linkSignature = null) {
     // 1. Create the inner message payload (what we had before)
     const payload = {
       task: taskName,
@@ -35,7 +36,7 @@ class TaskManager {
       eta: null,
       expires: null,
       utc: true,
-      callbacks: null,
+      callbacks: linkSignature ? [linkSignature] : null, // Use linkSignature if provided
       errbacks: null,
       chain: null,
       chord: null,
@@ -101,7 +102,22 @@ class TaskManager {
    */
   async queueScrapeTask(submissionId, url) {
     console.log(`Creating scrape task for URL: ${url} and submission ID: ${submissionId}`);
-    const { messageString, taskId } = this.createTaskMessage('scrape_product_reviews', [submissionId, url], {});
+    
+    // Define the signature for the linked analysis task
+    const analysisTaskSignature = {
+      task: 'worker.analyze_reviews', // Name of the task to link
+      args: [submissionId],         // Arguments for the linked task
+      kwargs: {},                    // Keyword arguments (none needed here)
+      options: {}                    // Celery options (none needed here)
+    };
+
+    const { messageString, taskId } = this.createTaskMessage(
+      'worker.scrape_reviews', 
+      [submissionId, url], 
+      {}, 
+      undefined, // Let createTaskMessage generate taskId
+      analysisTaskSignature // Pass the signature for the linked task
+    );
     const queueName = this.defaultQueue;
 
     try {

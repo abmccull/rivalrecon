@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import type { SupabaseClient } from '@/lib/supabase/custom-types';
 
 export default function SubmissionForm() {
   const [productUrl, setProductUrl] = useState('');
@@ -47,7 +48,7 @@ export default function SubmissionForm() {
         .insert([
           {
             user_id: session.user.id,
-            product_url: productUrl,
+            url: productUrl, // Fixed field name to match database schema
             product_title: productTitle,
             brand_name: url.hostname.replace('www.', ''),
             category_name: 'auto-detected',
@@ -59,18 +60,42 @@ export default function SubmissionForm() {
       
       if (submissionError) throw new Error(submissionError.message);
       
+      // Increment the submission counter using the dedicated Supabase function
+      try {
+        console.log('Incrementing submission counter for user:', session.user.id);
+        
+        // Direct call to the RPC function we've created in Supabase
+        // Cast to our custom SupabaseClient type to enable proper type checking
+        const customClient = supabase as unknown as SupabaseClient;
+        const { error: counterError } = await customClient.rpc(
+          'increment_submission_counter', // Function name as it exists in Supabase
+          { user_id_param: session.user.id }
+        );
+        
+        if (counterError) {
+          console.error('Error incrementing submission counter:', counterError);
+        } else {
+          console.log('Successfully incremented submission counter');
+        }
+      } catch (err) {
+        console.error('Exception in counter increment:', err);
+        // Continue with the submission process even if counter update fails
+      }
+      
       // If recurring is enabled, create recurring analysis record
       if (recurring && data && data[0]) {
+        // Properly type the recurring analysis record with all required fields
+        const recurringData = {
+          user_id: session.user.id,
+          submission_id: data[0].id,
+          interval: recurringFrequency, // Use interval instead of frequency to match the schema
+          next_run: new Date(Date.now() + (24 * 60 * 60 * 1000)).toISOString(), // Set default next run to tomorrow
+          status: 'scheduled'
+        };
+        
         const { error: recurringError } = await supabase
           .from('recurring_analyses')
-          .insert([
-            {
-              user_id: session.user.id,
-              submission_id: data[0].id,
-              frequency: recurringFrequency,
-              active: true
-            }
-          ]);
+          .insert([recurringData]);
         
         if (recurringError) console.error('Error creating recurring analysis:', recurringError);
       }

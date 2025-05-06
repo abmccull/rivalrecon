@@ -1,6 +1,36 @@
 "use client";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { DashboardSubmission, DashboardMetrics, DashboardInsight } from "@/lib/dashboard";
+// Define types locally since we haven't created the @/lib/dashboard module yet
+interface DashboardSubmission {
+  id: string;
+  analysisId?: string;
+  productTitle?: string;
+  brandName?: string;
+  categoryName?: string;
+  url: string;
+  status: string;
+  createdAt: string;
+}
+
+interface DashboardMetrics {
+  totalAnalyses: number;
+  completedAnalyses: number;
+  inProgressAnalyses: number;
+  competitorsTracked?: number;
+  reviewsAnalyzed?: number;
+}
+
+interface DashboardInsight {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  text?: string;
+  date?: string;
+  analysisId?: string;
+  displayName?: string; // AI-generated display name from the analyses table
+  submissionTitle?: string; // Keeping for backward compatibility
+}
 import { Button } from "@/components/ui/button";
 
 interface DashboardClientProps {
@@ -29,13 +59,22 @@ export default function DashboardClient({ submissions, metrics, insights }: Dash
     if (!analysisId) return;
     setRefreshingId(analysisId);
     try {
-      // TODO: Call your backend endpoint or Supabase function to trigger refresh
-      // Example: await fetch(`/api/refresh-analysis?id=${analysisId}`, { method: 'POST' });
-      // Simulate network delay
-      await new Promise((res) => setTimeout(res, 1200));
+      // Call the submissions refresh API endpoint
+      const response = await fetch(`/api/submissions/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ submissionId: analysisId }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to refresh analysis');
+      }
       // Optionally show a notification/toast here
     } catch (err) {
-      // Optionally handle error
+      // Handle errors with a more specific error message
+      console.error('Error refreshing analysis:', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setRefreshingId(null);
     }
@@ -209,8 +248,23 @@ export default function DashboardClient({ submissions, metrics, insights }: Dash
                     recurring,
                     recurringFrequency: recurring ? recurringFrequency : undefined,
                   };
-                  // TODO: Replace alert with actual backend call
-                  alert(JSON.stringify(payload, null, 2));
+                  // Trigger refresh for the analysis
+                  // Making this an async IIFE to allow await usage
+                  (async () => {
+                    try {
+                      const response = await fetch('/api/submissions', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                  });
+                  const analysis = await response.json();
+                      handleRefresh(analysis.id);
+                    } catch (error) {
+                      console.error('Failed to submit analysis:', error);
+                    }
+                  })();
                 }}>
                   <div className="mb-4">
 
@@ -428,26 +482,53 @@ export default function DashboardClient({ submissions, metrics, insights }: Dash
               {/* Recent Insights */}
               <div className="bg-white rounded-lg shadow-md p-6 mt-6">
                 <h2 className="text-xl font-bold text-[#1F2937] mb-4">Recent Insights</h2>
-                <div className="space-y-4">
-                  {insights.map((insight) => (
-                    <div key={insight.id} className="border-l-4 border-[#2DD4BF] pl-4 py-1">
-                      <p className="text-gray-600">{insight.text}</p>
-                      <div className="flex flex-col items-start mt-1 gap-0.5">
-                        <span className="text-xs text-gray-400">{insight.date}</span>
-                        {insight.analysisId && insight.submissionTitle && (
-                          <a
-                            href={`/dashboard/analysis/${insight.analysisId}`}
-                            className="text-xs text-[#2DD4BF] hover:underline font-medium"
-                          >
-                            {insight.submissionTitle}
-                          </a>
+                
+                {/* State for expanded insights */}
+                {(() => {
+                  // Using IIFE to create local state within JSX
+                  const [isExpanded, setIsExpanded] = useState(false);
+                  const initialCount = 5;
+                  const displayedInsights = isExpanded ? insights : insights.slice(0, initialCount);
+                  const toggleExpand = () => setIsExpanded(!isExpanded);
+                  
+                  return (
+                    <>
+                      {/* Insights container with conditional max-height and scrolling */}
+                      <div className={`space-y-4 ${isExpanded ? 'max-h-[500px] overflow-y-auto pr-2' : ''}`}>
+                        {displayedInsights.length > 0 ? (
+                          displayedInsights.map((insight) => (
+                            <div key={insight.id} className="border-l-4 border-[#2DD4BF] pl-4 py-1">
+                              <p className="text-gray-600">{insight.text}</p>
+                              <div className="flex flex-col items-start mt-1 gap-0.5">
+                                <span className="text-xs text-gray-400">{insight.date}</span>
+                                {insight.analysisId && (
+                                  <a
+                                    href={`/dashboard/analysis/${insight.analysisId}`}
+                                    className="text-xs text-[#2DD4BF] hover:underline font-medium"
+                                  >
+                                    {insight.displayName || insight.submissionTitle || 'View Analysis'}
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-gray-400">No recent insights.</div>
                         )}
                       </div>
-                    </div>
-                  ))}
-                  {insights.length === 0 && <div className="text-gray-400">No recent insights.</div>}
-                </div>
-                <span className="block text-center text-[#2DD4BF] mt-4 hover:underline cursor-pointer">View all insights</span>
+                      
+                      {/* Only show toggle button if there are more insights than the initial display count */}
+                      {insights.length > initialCount && (
+                        <button 
+                          onClick={toggleExpand} 
+                          className="block w-full text-center text-[#2DD4BF] mt-4 hover:underline cursor-pointer transition-colors"
+                        >
+                          {isExpanded ? 'Show less' : 'View all insights'}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

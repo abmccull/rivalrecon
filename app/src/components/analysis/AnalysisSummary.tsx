@@ -1,7 +1,42 @@
 "use client";
 
 import { Star, StarHalf, Copy, ExternalLink } from 'lucide-react';
-import { Analysis } from '@/lib/analysis';
+
+// Local definition to replace the missing external import
+interface Analysis {
+  id?: string;
+  submission_id?: string;
+  display_name?: string; // Add back the display_name property
+  product_title?: string;
+  brand_name?: string;
+  category_name?: string;
+  product_url?: string;
+  is_competitor_product?: boolean;
+  review_count?: number;
+  average_rating?: number;
+  rating_distribution?: any;
+  rating_distribution_percentages?: any; // New field from Supabase
+  sentiment_score?: number;
+  sentiment_positive_score?: number;
+  sentiment_negative_score?: number;
+  sentiment_neutral_score?: number;
+  top_positives?: string[];
+  top_negatives?: string[];
+  competitive_insights?: string[];
+  opportunities?: string[];
+  key_themes?: string[] | string;
+  themes?: string[];
+  trending?: string;
+  word_map?: Record<string, number>;
+  ratings_over_time?: Record<string, number>;
+  ratings_over_time_old?: Record<string, number>;
+  product_features?: Record<string, number>;
+  category_rank?: number;
+  total_in_category?: number;
+  competitors?: any[];
+  created_at?: string;
+  updated_at?: string;
+}
 
 interface AnalysisSummaryProps {
   analysis: Analysis;
@@ -17,14 +52,86 @@ export default function AnalysisSummary({ analysis }: AnalysisSummaryProps) {
   const reviewCount = analysis?.review_count || 0;
   const averageRating = analysis?.average_rating || 0;
   
-  // Extract rating distribution or provide fallback
-  const ratingDistribution = analysis?.rating_distribution || {
-    '5': 65,
+  // Log available data from the analysis object
+  console.log('Rating distribution from server:', analysis?.rating_distribution);
+  console.log('Pre-calculated percentages from server:', analysis?.rating_distribution_percentages);
+  
+  // Default rating distribution (fallback)
+  let ratingDistribution: Record<string, number> = {
+    '5': 30,
     '4': 20,
-    '3': 10,
-    '2': 3,
-    '1': 2
+    '3': 20,
+    '2': 10,
+    '1': 20
   };
+  
+  try {
+    // First try to use the pre-calculated percentages from Supabase
+    if (analysis?.rating_distribution_percentages && 
+        typeof analysis.rating_distribution_percentages === 'object') {
+      
+      // Clean the distribution to ensure consistent keys and values
+      const cleanDistribution: Record<string, number> = {};
+      
+      // Extract the percentages into our standard format
+      Object.entries(analysis.rating_distribution_percentages).forEach(([key, value]) => {
+        const stringKey = String(key);
+        const numValue = Number(value);
+        if (!isNaN(numValue)) {
+          cleanDistribution[stringKey] = numValue;
+        }
+      });
+      
+      // Ensure all ratings 1-5 have a value
+      for (let i = 1; i <= 5; i++) {
+        const stringKey = String(i);
+        if (cleanDistribution[stringKey] === undefined) {
+          cleanDistribution[stringKey] = 0;
+        }
+      }
+      
+      ratingDistribution = cleanDistribution;
+      console.log('Using pre-calculated percentages from server:', ratingDistribution);
+    }
+    // Fall back to the raw distribution data if percentages aren't available
+    else if (analysis?.rating_distribution && 
+             typeof analysis.rating_distribution === 'object') {
+      
+      console.log('Pre-calculated percentages not available, using raw distribution.');
+      
+      // Get raw counts in a consistent format
+      const rawCounts: Record<string, number> = {};
+      
+      // Extract the counts
+      Object.entries(analysis.rating_distribution).forEach(([key, value]) => {
+        const stringKey = String(key);
+        const numValue = Number(value);
+        if (!isNaN(numValue)) {
+          rawCounts[stringKey] = numValue;
+        }
+      });
+      
+      // Calculate total ratings
+      const totalRatings = Object.values(rawCounts).reduce(
+        (sum, count) => sum + count, 0
+      );
+      
+      // Calculate percentages if we have ratings
+      if (totalRatings > 0) {
+        // Calculate percentage for each rating
+        for (let i = 1; i <= 5; i++) {
+          const stringKey = String(i);
+          const count = rawCounts[stringKey] || 0;
+          ratingDistribution[stringKey] = Math.round((count / totalRatings) * 100);
+        }
+      }
+      
+      console.log('Calculated percentages as fallback:', ratingDistribution);
+    }
+  } catch (error) {
+    console.error('Error processing rating distribution:', error);
+    // Keep the default distribution if processing fails
+  }
   
   // Extract top positives and negatives
   const topPositives = analysis?.top_positives || [];
@@ -113,20 +220,58 @@ export default function AnalysisSummary({ analysis }: AnalysisSummaryProps) {
           <div className="bg-[#F7FAFC] p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Rating Distribution</h3>
             <div className="space-y-2">
-              {[5, 4, 3, 2, 1].map((rating: number) => {
-                const percentage = ratingDistribution?.[rating.toString()] || 0;
-                return (
-                  <div key={rating} className="flex items-center">
-                    <span className="text-xs text-gray-600 w-6">{rating}★</span>
-                    <div className="flex-1 mx-2">
-                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#2DD4BF]" style={{ width: `${percentage}%` }}></div>
-                      </div>
-                    </div>
-                    <span className="text-xs text-gray-600 w-8 text-right">{percentage}%</span>
-                  </div>
+              {(() => {
+                // Get the raw distribution data
+                let rawDistribution: Record<string, number> = {};
+                
+                // Parse rating distribution data directly in the render function
+                // to ensure we're always working with the latest data
+                if (typeof analysis?.rating_distribution === 'string') {
+                  try {
+                    rawDistribution = JSON.parse(analysis.rating_distribution);
+                  } catch (e) {
+                    console.error('Failed to parse distribution string', e);
+                  }
+                } else if (analysis?.rating_distribution && typeof analysis.rating_distribution === 'object') {
+                  rawDistribution = analysis.rating_distribution;
+                }
+                
+                // Calculate total ratings to derive percentages
+                const totalRatings = Object.values(rawDistribution).reduce(
+                  (sum, count) => sum + Number(count), 0
                 );
-              })}
+                
+                // Calculate percentages for display
+                const calculatedPercentages: Record<string, number> = {};
+                if (totalRatings > 0) {
+                  for (let i = 1; i <= 5; i++) {
+                    const key = i.toString();
+                    const count = Number(rawDistribution[key] || 0);
+                    calculatedPercentages[key] = Math.round((count / totalRatings) * 100);
+                  }
+                }
+                
+                console.log('Raw distribution:', rawDistribution);
+                console.log('Calculated percentages for display:', calculatedPercentages);
+                
+                // Render the rating bars
+                return [5, 4, 3, 2, 1].map((rating: number) => {
+                  const stringRating = rating.toString();
+                  const percentage = calculatedPercentages[stringRating] || 0;
+                  
+                  return (
+                    <div key={rating} className="flex items-center">
+                      <span className="text-xs text-gray-600 w-6">{rating}★</span>
+                      <div className="flex-1 mx-2">
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-[#2DD4BF]" style={{ width: `${percentage}%` }}></div>
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-600 w-8 text-right">{percentage}%</span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
           

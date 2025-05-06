@@ -1,45 +1,36 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+// Centralized function for Supabase auth token refreshing and cookie management
 export async function middleware(request: NextRequest) {
+  // Create a response object that we'll modify and return
   const response = NextResponse.next();
 
+  // Create a Supabase client specifically for the middleware context
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          // Only process and log the main Supabase auth token (no indexed variants)
-          if (name === 'sb-yqpyrnnxswvlnuuijmsn-auth-token') {
-            const value = request.cookies.get(name)?.value;
-            if (value !== undefined) {
-              console.log('Middleware getting cookie:', name, value);
-            }
-            return value;
-          }
-          // For all other cookie names, do NOT log anything, just return undefined
-          return undefined;
+          // Get cookie value safely - avoid hardcoding specific cookie names
+          return request.cookies.get(name)?.value;
         },
         set(name: string, value: string, options: any) {
-          let finalValue = value;
-          try {
-            // Try decoding if base64
-            if (typeof value === 'string' && value.startsWith('base64-')) {
-              finalValue = Buffer.from(value.replace('base64-', ''), 'base64').toString('utf-8');
-              JSON.parse(finalValue); // Ensure valid JSON
-            } else {
-              JSON.parse(value);
-            }
-            request.cookies.set({ name, value: finalValue, ...options });
-            response.cookies.set({ name, value: finalValue, ...options });
-            console.log('Middleware setting cookie:', name, finalValue);
-          } catch (e) {
-            console.error('Invalid cookie value for', name, ':', value, e);
-          }
+          // Set cookie in both request and response for consistency
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          });
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          });
         },
         remove(name: string) {
-          console.log('Middleware removing cookie:', name);
+          // Remove cookie from both request and response
           request.cookies.delete(name);
           response.cookies.delete(name);
         },
@@ -47,7 +38,9 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  await supabase.auth.getSession();
+  // Important: Use getUser() for token refreshing in middleware
+  // This refreshes the session by calling Supabase Auth directly
+  await supabase.auth.getUser();
 
   return response;
 }

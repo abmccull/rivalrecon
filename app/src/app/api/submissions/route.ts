@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createClient as createServerSupabaseClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
     
     // Get the current user session
     const { data: { session } } = await supabase.auth.getSession();
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
         console.error('Error creating recurring analysis:', recurringError);
         // We don't fail the request, just log the error
       } else {
-        console.log('Created recurring analysis:', recurringAnalysis);
+        // Recurring analysis created successfully
       }
     }
     

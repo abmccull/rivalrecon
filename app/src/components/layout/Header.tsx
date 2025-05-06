@@ -12,37 +12,33 @@ export default function Header() {
   const [firstName, setFirstName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [isClient, setIsClient] = useState(false);
+  
+  // Set client-side flag after hydration
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
   const supabase = createClient();
 
-  // Log authentication state for debugging
-  useEffect(() => {
-    console.log("Header - Auth state:", { user: !!typedUser, loading });
-  }, [typedUser, loading]);
 
   // Get user's first name from profile table or user metadata
   useEffect(() => {
     const fetchProfileData = async () => {
       if (!typedUser) {
-        console.log("Header - No user, skipping profile fetch");
         return;
       }
       
-      console.log("Header - Fetching profile data for user:", typedUser.id);
       try {
         // First try to get from profiles table
         const { data: profileData, error } = await supabase
           .from('profiles')
-          .select('first_name, display_name, avatar_url')
+          .select('*')
           .eq('id', typedUser.id)
           .single();
           
         if (profileData && !error) {
-          console.log("Header - Profile data found:", { 
-            first_name: profileData.first_name, 
-            display_name: profileData.display_name 
-          });
           
-          // Use first_name if available, otherwise use first part of display_name
+          // Use first_name if available, otherwise use fallbacks
           if (profileData.first_name) {
             setFirstName(profileData.first_name);
           } else if (profileData.display_name) {
@@ -53,6 +49,7 @@ export default function Header() {
           if (profileData.avatar_url) {
             setAvatarUrl(profileData.avatar_url);
           }
+          
           return;
         } else if (error) {
           console.log("Header - Error fetching profile:", error);
@@ -123,9 +120,7 @@ export default function Header() {
           </nav>
         </div>
         <div className="flex items-center space-x-4">
-          <div className="hidden md:flex items-center space-x-3">
-            {/* Replace with your bell icon import if needed */}
-            <svg className="text-gray-600 h-6 w-6 cursor-pointer hover:text-[#2DD4BF]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 7.165 6 9.388 6 12v2.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+          <div className="hidden md:flex items-center">
             
             {/* User greeting */}
             {typedUser && !loading && (
@@ -142,7 +137,7 @@ export default function Header() {
                   alt="User Avatar" 
                   width={40}
                   height={40}
-                  className="rounded-full border-2 border-[#2DD4BF] cursor-pointer object-cover"
+                  className="rounded-full border-2 border-[#2DD4BF] cursor-pointer object-cover w-10 h-10"
                   onClick={() => setOpen((v) => !v)}
                 />
               ) : (

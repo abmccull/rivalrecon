@@ -15,16 +15,31 @@ interface PlotlyProps {
 // Fix the dynamic import to properly handle the Plot component
 const Plot = dynamic<PlotlyProps>(() => import('react-plotly.js').then(mod => mod.default), { ssr: false });
 
-export type SentimentSectionProps = { analysis: any };
-export default function SentimentSection({ analysis }: SentimentSectionProps) {
+interface SentimentSectionProps {
+  sentimentPositive: number;
+  sentimentNegative: number;
+  sentimentNeutral: number;
+  productName?: string;
+  reviewCount?: number;
+  averageRating?: number;
+}
+
+export default function SentimentSection({
+  sentimentPositive,
+  sentimentNegative,
+  sentimentNeutral,
+  productName = 'N/A',
+  reviewCount = 0,
+  averageRating = 0,
+}: SentimentSectionProps) {
   return (
     <div className="p-6 bg-white shadow-md rounded-lg mb-6">
       <h2 className="text-xl font-semibold text-gray-800 mb-4">Sentiment & Summary</h2>
       <div className="flex flex-col space-y-4">
         <div className="text-gray-800 text-sm">
-          <p><strong>Product:</strong> Nuun Electrolyte Tablets</p>
-          <p><strong>Total Reviews:</strong> 50</p>
-          <p><strong>Average Rating:</strong> 4.5/5.0</p>
+          <p><strong>Product:</strong> {productName}</p>
+          <p><strong>Total Reviews:</strong> {reviewCount}</p>
+          <p><strong>Average Rating:</strong> {averageRating ? averageRating.toFixed(1) : 'N/A'}/5.0</p>
         </div>
         <div className="h-40">
           {typeof window !== 'undefined' && (
@@ -32,7 +47,7 @@ export default function SentimentSection({ analysis }: SentimentSectionProps) {
               data={[{
                 type: 'indicator',
                 mode: 'gauge+number',
-                value: 82,
+                value: sentimentPositive,
                 gauge: {
                   axis: { range: [0, 100] },
                   bar: { color: '#00A896' },
@@ -48,10 +63,13 @@ export default function SentimentSection({ analysis }: SentimentSectionProps) {
           {typeof window !== 'undefined' && (
             <Plot
               data={[{
-                values: [70, 20, 10],
+                values: [sentimentPositive, sentimentNegative, sentimentNeutral],
                 labels: ['Positive', 'Negative', 'Neutral'],
                 type: 'pie',
                 marker: { colors: ['#00A896', '#F94144', '#F9C74F'] },
+                hole: .4,
+                hoverinfo: 'label+percent',
+                textinfo: 'none'
               }]}
               layout={{ margin: { t: 0, b: 0 }, height: 160, width: 320, showlegend: true }}
               config={{ displayModeBar: false }}

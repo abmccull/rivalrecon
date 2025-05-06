@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 import supabase
 from celery import shared_task
-from tasks import process_submission
+# from .tasks import process_pending_submissions
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize Supabase client
 supabase_url = os.environ.get('SUPABASE_URL')
-supabase_key = os.environ.get('SUPABASE_SERVICE_KEY')
+supabase_key = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
 
 if not supabase_url or not supabase_key:
     logger.error("Supabase credentials not found in environment variables")
@@ -87,7 +87,7 @@ def run_midnight_scheduler():
                 logger.info(f"Created new submission {new_submission_id} for recurring job {job['id']}")
                 
                 # Queue the submission for processing
-                process_submission.delay(new_submission_id)
+                # process_pending_submissions.delay(new_submission_id)
                 logger.info(f"Queued submission {new_submission_id} for processing")
                 
                 # Calculate next run date

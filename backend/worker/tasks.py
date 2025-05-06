@@ -1,12 +1,11 @@
-from celery import Celery
+from celery import Celery, chain, shared_task
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Union
 import requests
 import json
 from datetime import datetime
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from celery.task import shared_task
 import logging
 
 # Load environment variables
@@ -26,164 +25,14 @@ supabase: Client = create_client(supabase_url, supabase_key)
 
 logger = logging.getLogger(__name__)
 
-@celery.task
-def scrape_product_reviews(url: str) -> Dict[str, Any]:
-    """
-    Task to scrape product reviews based on the URL type
-    """
-    try:
-        # Determine the type of URL and use appropriate scraper
-        if 'amazon.com' in url:
-            return scrape_amazon(url)
-        elif any(platform in url for platform in ['shopify.com', 'myshopify.com']):
-            return scrape_shopify(url)
-        else:
-            return {'error': 'Unsupported platform'}
-    except Exception as e:
-        return {'error': str(e)}
+# The scrape_reviews task has been moved to worker.py to avoid duplication
+# Do not define it here to prevent conflicts with the robust implementation
 
-@celery.task
-def analyze_reviews(submission_id: str) -> Dict[str, Any]:
-    """
-    Task to analyze reviews using DeepSeek API
-    """
-    try:
-        # Fetch reviews and product details from Supabase
-        reviews_response = supabase.table('reviews').select('*').eq('submission_id', submission_id).execute()
-        if not reviews_response.data:
-            # Update submission status to failed
-            supabase.table('submissions').update({
-                'status': 'failed', 
-                'error_message': 'No reviews found for analysis'
-            }).eq('id', submission_id).execute()
-            return {'status': 'error', 'message': 'No reviews found for analysis'}
+# The Amazon scraping functionality has been moved to worker.py
+# See scrape_amazon_data function in worker.py for the robust implementation
 
-        product_response = supabase.table('submissions').select('*').eq('id', submission_id).single().execute()
-        if not product_response.data:
-            return {'status': 'error', 'message': 'Submission not found'}
-
-        reviews = reviews_response.data
-        product_details = product_response.data
-
-        # Calculate basic metrics from the reviews data
-        review_count = len(reviews)
-        ratings = [float(review['review_rating']) for review in reviews if review.get('review_rating')]
-        average_rating = sum(ratings) / len(ratings) if ratings else 0
-
-        # Prepare metadata for analysis
-        metadata = {
-            'product_name': product_details.get('product_title', 'Unknown Product'),
-            'brand': product_details.get('brand_name', 'Unknown Brand'),
-            'category': product_details.get('category_name', 'Unknown Category'),
-            'asin': product_details.get('asin'),
-            'is_competitor_product': product_details.get('is_competitor_product', False)
-        }
-
-        # Initialize DeepSeek API client
-        api_key = os.getenv('DEEPSEEK_API_KEY')
-        if not api_key:
-            # Update submission status to failed
-            supabase.table('submissions').update({
-                'status': 'failed', 
-                'error_message': 'DeepSeek API key not configured'
-            }).eq('id', submission_id).execute()
-            return {'status': 'error', 'message': 'DeepSeek API key not configured'}
-
-        # Import here to avoid circular imports
-        from services.deepseekService import DeepSeekService
-        deepseek = DeepSeekService(api_key)
-
-        # Perform analysis - this will throw an error if analysis is incomplete
-        analysis_results = deepseek.analyzeReviews(reviews, metadata)
-
-        # Store analysis results in Supabase
-        analysis_data = {
-            'submission_id': submission_id,
-            'review_count': review_count,
-            'average_rating': average_rating,
-            'sentiment_score': analysis_results['sentiment_score'],
-            'sentiment_distribution': analysis_results['sentiment_distribution'],
-            'keywords': analysis_results['keywords'],
-            'product_features': analysis_results['product_features'],
-            'ratings_over_time': analysis_results['ratings_over_time'],
-            'rating_distribution': analysis_results['rating_distribution'],
-            'key_insights': analysis_results['key_insights'],
-            'improvement_opportunities': analysis_results['improvement_opportunities'],
-            'review_text_sample': analysis_results['review_text_sample'],
-            'top_positives': analysis_results['top_positives'],
-            'top_negatives': analysis_results['top_negatives'],
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat()
-        }
-
-        # Support for legacy fields (only if they exist in the analysis results)
-        if 'word_map' in analysis_results:
-            analysis_data['word_map'] = analysis_results['word_map']
-        
-        if 'opportunities' in analysis_results:
-            analysis_data['opportunities'] = analysis_results['opportunities']
-        
-        if 'key_themes' in analysis_results:
-            analysis_data['key_themes'] = analysis_results['key_themes']
-            
-        if 'trending' in analysis_results:
-            analysis_data['trending'] = analysis_results['trending']
-        
-        if 'competitive_insights' in analysis_results:
-            analysis_data['competitive_insights'] = analysis_results['competitive_insights']
-
-        # Add competitive fields if they exist
-        if 'competitive_advantages' in analysis_results:
-            analysis_data['competitive_advantages'] = analysis_results['competitive_advantages']
-            
-        if 'competitive_disadvantages' in analysis_results:
-            analysis_data['competitive_disadvantages'] = analysis_results['competitive_disadvantages']
-
-        # Insert analysis into Supabase
-        result = supabase.table('analyses').insert(analysis_data).execute()
-        
-        if result.data:
-            # Update submission status to completed
-            supabase.table('submissions').update({'status': 'completed'}).eq('id', submission_id).execute()
-            return {
-                'status': 'success',
-                'message': 'Analysis completed and stored successfully',
-                'analysis_id': result.data[0]['id']
-            }
-        else:
-            # Update submission status to failed
-            supabase.table('submissions').update({
-                'status': 'failed',
-                'error_message': 'Failed to store analysis results'
-            }).eq('id', submission_id).execute()
-            raise Exception('Failed to store analysis results')
-
-    except Exception as e:
-        # Update submission status to failed with specific error message
-        error_message = str(e)
-        supabase.table('submissions').update({
-            'status': 'failed',
-            'error_message': error_message[:255]  # Limit error message length for storage
-        }).eq('id', submission_id).execute()
-        return {'status': 'error', 'message': error_message}
-
-def scrape_amazon(url: str) -> Dict[str, Any]:
-    """
-    Scrape Amazon reviews using RapidAPI
-    """
-    api_key = os.getenv('RAPIDAPI_KEY')
-    if not api_key:
-        return {'error': 'RapidAPI key not configured'}
-    
-    # TODO: Implement RapidAPI call
-    return {'status': 'Scraping completed', 'data': {}}
-
-def scrape_shopify(url: str) -> Dict[str, Any]:
-    """
-    Scrape Shopify reviews using Scrapy
-    """
-    # TODO: Implement Scrapy scraper
-    return {'status': 'Scraping completed', 'data': {}}
+# The Shopify scraping functionality has been moved to worker.py
+# See scrape_shopify_reviews function in worker.py for the robust implementation
 
 @shared_task(name="refresh_submission")
 def refresh_submission(submission_id):

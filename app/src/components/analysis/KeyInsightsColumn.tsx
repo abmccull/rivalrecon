@@ -8,7 +8,40 @@ import {
   ChevronRight,
   Check
 } from 'lucide-react';
-import { Analysis } from '@/lib/analysis';
+
+// Local definition to replace the missing external import
+interface Analysis {
+  id?: string;
+  display_name?: string;
+  product_title?: string;
+  brand_name?: string;
+  category_name?: string;
+  product_url?: string;
+  is_competitor_product?: boolean;
+  review_count?: number;
+  average_rating?: number;
+  rating_distribution?: any;
+  sentiment_score?: number;
+  sentiment_positive_score?: number;
+  sentiment_negative_score?: number;
+  sentiment_neutral_score?: number;
+  top_positives?: string[];
+  top_negatives?: string[];
+  competitive_insights?: string[];
+  opportunities?: string[];
+  key_themes?: string[] | string;
+  themes?: string[];
+  trending?: string;
+  word_map?: Record<string, number>;
+  ratings_over_time?: Record<string, number>;
+  ratings_over_time_old?: Record<string, number>;
+  product_features?: Record<string, number>;
+  category_rank?: number;
+  total_in_category?: number;
+  competitors?: any[];
+  created_at?: string;
+  updated_at?: string;
+}
 
 interface KeyInsightsColumnProps {
   analysis: Analysis;
@@ -19,7 +52,61 @@ export default function KeyInsightsColumn({ analysis }: KeyInsightsColumnProps) 
   const aiSummary = analysis?.trending || "No AI summary available for this product.";
   
   // Extract key themes from the analysis
-  const keyThemes = Array.isArray(analysis?.key_themes) ? analysis.key_themes : [];
+  let keyThemes: string[] = [];
+  
+  // First try to get the themes data from various possible sources
+  try {
+    if (typeof analysis?.key_themes === 'string') {
+      // String could be in various formats, try multiple parsing approaches
+      try {
+        // Try parsing as JSON
+        const parsed = JSON.parse(analysis.key_themes);
+        if (Array.isArray(parsed)) {
+          keyThemes = parsed;
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          // Handle case where it's an object with keys like { "0": "theme1", "1": "theme2" }
+          keyThemes = Object.values(parsed).map(item => String(item));
+        }
+      } catch (jsonError) {
+        // If JSON parsing fails, try other formats
+        const str = analysis.key_themes;
+        if (str.startsWith('[') && str.endsWith(']')) {
+          // Try to parse array-like string
+          try {
+            keyThemes = str.slice(1, -1).split(',').map((s: string) => {
+              // Remove quotes and trim
+              return s.replace(/^['"]|['"]$/g, '').trim();
+            }).filter(Boolean);
+          } catch (arrayError) {
+            // Parsing as array failed
+          }
+        } else {
+          // Simple comma-separated string
+          keyThemes = str.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+      }
+    } else if (Array.isArray(analysis?.key_themes)) {
+      // If it's already an array, use it directly
+      keyThemes = analysis.key_themes.map((item: any) => String(item));
+    } else if (analysis?.themes && Array.isArray(analysis.themes)) {
+      // Fallback to themes field if it exists
+      keyThemes = analysis.themes.map((item: any) => String(item));
+    } else if (analysis?.top_positives && Array.isArray(analysis.top_positives)) {
+      // Another fallback - use positive themes
+      keyThemes = analysis.top_positives.slice(0, 5).map((item: any) => String(item));
+    }
+    
+    // Filter out any empty themes
+    keyThemes = keyThemes.filter(theme => theme && theme.trim().length > 0);
+    
+    // Default fallback if we still have no themes
+    if (keyThemes.length === 0 && analysis?.top_positives && Array.isArray(analysis.top_positives)) {
+      keyThemes = analysis.top_positives.slice(0, 3);
+    }
+  } catch (error) {
+    console.error('Error handling key themes:', error);
+    keyThemes = [];
+  }
   
   // Create positive themes from top_positives
   const positiveThemes = Array.isArray(analysis?.top_positives) 
@@ -37,47 +124,94 @@ export default function KeyInsightsColumn({ analysis }: KeyInsightsColumnProps) 
       }))
     : [];
   
-  // Extract competitive advantages from competitive_insights
-  const competitiveAdvantages = Array.isArray(analysis?.competitive_insights)
-    ? analysis.competitive_insights.slice(0, 3)
-    : [
-        "Natural ingredient list resonates strongly with health-conscious consumers",
-        "Better taste profile than competitors",
-        "Lower reported side effects"
+  // Extract competitive advantages from competitive_insights or themes
+  let competitiveAdvantages = [];
+  try {
+    // Check for different possible field names
+    if (Array.isArray(analysis?.competitive_insights)) {
+      competitiveAdvantages = analysis.competitive_insights.slice(0, 3);
+    } else if (typeof analysis?.competitive_insights === 'string') {
+      // Try to parse it as JSON
+      const parsed = JSON.parse(analysis.competitive_insights);
+      competitiveAdvantages = Array.isArray(parsed) ? parsed.slice(0, 3) : [];
+    } else if (analysis?.top_positives && Array.isArray(analysis.top_positives)) {
+      // Fallback to top_positives if competitive_insights isn't available
+      competitiveAdvantages = analysis.top_positives.slice(0, 3);
+    } else {
+      competitiveAdvantages = [
+        "No competitive insights available"
       ];
+    }
+  } catch (error) {
+    console.error('Error parsing competitive insights:', error);
+    competitiveAdvantages = ["No competitive insights available"];
+  }
       
-  // Extract improvement opportunities from opportunities
-  const improvementOpportunities = Array.isArray(analysis?.opportunities)
-    ? analysis.opportunities.map((opportunity: string, index: number) => ({
+  // Define the type for improvement opportunities
+  interface ImprovementOpportunity {
+    title: string;
+    description: string;
+    priority: string;
+    priorityColor: string;
+    impactScore: string;
+  }
+
+  // Extract improvement opportunities from different possible fields
+  let improvementOpportunities: ImprovementOpportunity[] = [];
+  try {
+    // Check for different possible field names
+    if (Array.isArray(analysis?.opportunities)) {
+      improvementOpportunities = analysis.opportunities.map((opportunity: string, index: number) => ({
         title: opportunity.split(':')[0] || `Opportunity ${index + 1}`,
         description: opportunity,
         priority: index === 0 ? "High Priority" : index === 1 ? "Medium Priority" : "Growth Opportunity",
         priorityColor: index === 0 ? "red" : index === 1 ? "yellow" : "blue",
         impactScore: (Math.floor(Math.random() * 3) + 6) + "." + Math.floor(Math.random() * 10)
-      })).slice(0, 3)
-    : [
+      })).slice(0, 3);
+    } else if (typeof analysis?.opportunities === 'string') {
+      // Try to parse it as JSON
+      const parsed = JSON.parse(analysis.opportunities);
+      if (Array.isArray(parsed)) {
+        improvementOpportunities = parsed.map((opportunity: string, index: number) => ({
+          title: opportunity.split(':')[0] || `Opportunity ${index + 1}`,
+          description: opportunity,
+          priority: index === 0 ? "High Priority" : index === 1 ? "Medium Priority" : "Growth Opportunity",
+          priorityColor: index === 0 ? "red" : index === 1 ? "yellow" : "blue",
+          impactScore: (Math.floor(Math.random() * 3) + 6) + "." + Math.floor(Math.random() * 10)
+        })).slice(0, 3);
+      }
+    } else if (analysis?.top_negatives && Array.isArray(analysis.top_negatives)) {
+      // Fallback to top_negatives if opportunities isn't available
+      improvementOpportunities = analysis.top_negatives.map((negative: string, index: number) => ({
+        title: negative.split(':')[0] || `Improvement Area ${index + 1}`,
+        description: negative,
+        priority: index === 0 ? "High Priority" : index === 1 ? "Medium Priority" : "Growth Opportunity",
+        priorityColor: index === 0 ? "red" : index === 1 ? "yellow" : "blue",
+        impactScore: (Math.floor(Math.random() * 3) + 6) + "." + Math.floor(Math.random() * 10)
+      })).slice(0, 3);
+    } else {
+      improvementOpportunities = [
         {
-          title: "Price Concerns",
-          description: "Many customers find the product overpriced compared to competitors.",
-          priority: "High Priority",
-          priorityColor: "red",
-          impactScore: "8.4"
-        },
-        {
-          title: "Packaging Issues",
-          description: "Some negative reviews mention packaging problems during shipping.",
-          priority: "Medium Priority",
-          priorityColor: "yellow",
-          impactScore: "6.7"
-        },
-        {
-          title: "Flavor Expansion",
-          description: "Customers frequently request more options and varieties.",
-          priority: "Growth Opportunity",
+          title: "No Improvement Data",
+          description: "No improvement opportunities data available for this analysis.",
+          priority: "Information",
           priorityColor: "blue",
-          impactScore: "7.2"
+          impactScore: "N/A"
         }
       ];
+    }
+  } catch (error) {
+    console.error('Error parsing improvement opportunities:', error);
+    improvementOpportunities = [
+      {
+        title: "No Improvement Data",
+        description: "No improvement opportunities data available for this analysis.",
+        priority: "Information",
+        priorityColor: "blue",
+        impactScore: "N/A"
+      }
+    ];
+  }
   return (
     <div className="lg:col-span-1 space-y-8">
       {/* AI Summary */}

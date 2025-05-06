@@ -32,7 +32,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   // Handle the user updates and profile sync
   const handleUserUpdate = useCallback(async (newUser: User | null) => {
-    console.log("Auth state changed, user:", newUser ? "logged in" : "logged out");
+
     setUser(newUser);
     
     // If we have a user, make sure their profile is synced
@@ -49,7 +49,6 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const getSession = async () => {
       try {
-        console.log("Checking for existing session...");
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -60,11 +59,46 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (data?.session?.user) {
-          console.log("Found existing session");
           await handleUserUpdate(data.session.user);
-          // Do not redirect here; let the sign-in page handle navigation after login
+          
+          // Define subscription-required pages vs. auth-only pages
+          const subscriptionRequiredPages = ['/dashboard', '/analysis', '/competitors'];
+          const authRequiredPages = [...subscriptionRequiredPages, '/settings', '/teams'];
+          
+          // Check if current page requires subscription
+          const requiresSubscription = subscriptionRequiredPages.some(route => 
+            pathname === route || pathname.startsWith(`${route}/`)
+          );
+          
+          // Check if current page requires authentication
+          const requiresAuth = authRequiredPages.some(route => 
+            pathname === route || pathname.startsWith(`${route}/`)
+          );
+          
+          if (requiresSubscription) {
+            // Check if user has an active subscription
+            try {
+              const { data: subscription, error: subError } = await supabase
+                .from('subscriptions')
+                .select('*')
+                .eq('user_id', data.session.user.id)
+                .single();
+              
+              if (subError || !subscription) {
+                console.log('No subscription found, redirecting to pricing');
+                router.push('/pricing');
+                return;
+              }
+            } catch (subCheckError) {
+              console.error('Error checking subscription:', subCheckError);
+              router.push('/pricing');
+              return;
+            }
+          } else if (requiresAuth) {
+            // Page requires auth but not subscription, so we're good
+            console.log('User authenticated for auth-only page');
+          }
         } else {
-          console.log("No session found");
           setUser(null);
           
           // If on a protected page without a valid session, redirect to sign-in
@@ -90,9 +124,9 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
     // Listen for auth state changes
     try {
-      console.log("Setting up auth state change listener");
+
       const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log("Auth state change event:", event);
+
         const newUser = session?.user ?? null;
         await handleUserUpdate(newUser);
         
@@ -106,7 +140,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       return () => {
-        console.log("Cleaning up auth listener");
+
         listener?.subscription.unsubscribe();
       };
     } catch (error) {
@@ -119,7 +153,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     setLoading(true);
     try {
-      console.log("Attempting sign in for:", email);
+
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
@@ -129,7 +163,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       if (data.session?.user) {
-        console.log("Sign in successful");
+
         await handleUserUpdate(data.session.user);
         // No longer handling redirect here since the sign-in page does it
       } else {
@@ -148,22 +182,28 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     setLoading(true);
     try {
-      console.log("Signing out...");
+      // Log the sign out attempt
+      console.log("Attempting to sign out user");
+      
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error("Error signing out:", error);
       } else {
-        console.log("Sign out successful");
+        console.log("User signed out successfully");
+        
+        // Clear user state
         setUser(null);
-        router.push('/sign-in');
-        router.refresh();
+        
+        // Force a hard navigation to the sign-in page
+        // This is more reliable than router.push for auth state changes
+        window.location.href = '/sign-in';
       }
     } catch (error) {
       console.error("Error during sign out:", error);
     } finally {
       setLoading(false);
     }
-  }, [supabase, router]);
+  }, [supabase]);
 
   return (
     <AuthContext.Provider value={{ user, signIn, signOut, loading }}>

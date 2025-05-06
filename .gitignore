@@ -4,8 +4,10 @@
 .env.development
 .env.test
 .env.production
-# But allow example file
+# But allow example files
 !.env.example
+!**/.env.example
+!**/.env.*.example
 
 # Python
 __pycache__/

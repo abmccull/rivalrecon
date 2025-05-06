@@ -50,15 +50,16 @@ const HowItWorks: React.FC = () => {
             </div>
           </div>
 
-          {/* Image Content */}
+          {/* Detailed Report Image */}
           <div className="relative mt-10 md:mt-0">
             <div className="rounded-lg overflow-hidden shadow-xl">
               <Image
-                src="https://storage.googleapis.com/uxpilot-auth.appspot.com/1e7607f2cc-f0b3533c099d12218ddb.png"
-                alt="Product dashboard showing competitor analysis"
-                width={600} // Provide width and height for non-fill images
-                height={450}
-                className="w-full h-auto"
+                src="/howitworks.png"
+                alt="Detailed product analysis report showing sentiment analysis, ratings trends, and key insights"
+                width={650}
+                height={800}
+                style={{ width: '100%', height: 'auto' }}
+                className="rounded-lg shadow-lg object-contain"
               />
             </div>
             <div className="absolute -bottom-6 -right-6 bg-[#2DD4BF] text-white p-4 rounded-lg shadow-lg hidden sm:block">

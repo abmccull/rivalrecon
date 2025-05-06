@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface ConfirmationModalProps {
   isOpen: boolean;
@@ -26,6 +26,54 @@ export default function ConfirmationModal({
   position
 }: ConfirmationModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+  const [calculatedPosition, setCalculatedPosition] = useState<{ top: number; left: number } | null>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // Calculate position when modal opens or position changes
+  useEffect(() => {
+    if (isOpen && position && modalRef.current) {
+      const modalRect = modalRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const padding = 15; // Padding from viewport edges
+
+      // Initial desired position (below and to the left of the cursor)
+      let desiredTop = position.y + padding;
+      let desiredLeft = position.x - modalRect.width - padding;
+
+      // Adjust if it goes off-screen vertically
+      if (desiredTop + modalRect.height > viewportHeight - padding) {
+        desiredTop = viewportHeight - modalRect.height - padding; // Align to bottom edge
+      }
+      if (desiredTop < padding) {
+        desiredTop = padding; // Align to top edge
+      }
+
+      // Adjust if it goes off-screen horizontally (try left first, then right)
+      if (desiredLeft < padding) { // If goes off left
+        desiredLeft = position.x + padding; // Try placing to the right
+        if (desiredLeft + modalRect.width > viewportWidth - padding) { // If still goes off right
+          desiredLeft = viewportWidth - modalRect.width - padding; // Align to right edge
+        }
+      } else if (desiredLeft + modalRect.width > viewportWidth - padding) { // If goes off right initially
+        desiredLeft = viewportWidth - modalRect.width - padding; // Align to right edge
+      }
+      
+      // Ensure left isn't negative after adjustments
+      desiredLeft = Math.max(padding, desiredLeft);
+
+      setCalculatedPosition({ top: desiredTop, left: desiredLeft });
+      setIsVisible(true); // Make visible after calculation
+
+    } else if (isOpen && !position) {
+        // If centered, make visible immediately
+        setCalculatedPosition(null); // Ensure calculation is reset
+        setIsVisible(true);
+    } else {
+        // Reset visibility if closed
+        setIsVisible(false);
+    }
+  }, [isOpen, position]);
 
   // Close modal when clicking outside
   useEffect(() => {
@@ -88,20 +136,32 @@ export default function ConfirmationModal({
 
   const buttonColors = getButtonColors();
 
-  // Calculate position based on clicked coordinates or default to center
-  const modalStyle = position ? {
-    position: 'fixed' as const,
-    top: `${position.y}px`,
-    left: `${position.x}px`,
-    transform: 'translate(-90%, -50%)', // Position it to the left of the cursor
-    zIndex: 50
-  } : {
-    position: 'fixed' as const,
-    top: '50%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    zIndex: 50
+  // Determine the final style
+  let modalStyle: React.CSSProperties = {
+      position: 'fixed',
+      zIndex: 50,
+      opacity: isVisible ? 1 : 0, // Control visibility
+      transition: 'opacity 0.15s ease-in-out', // Smooth fade-in/out
   };
+
+  if (position && calculatedPosition) {
+    // Use calculated position if available
+    modalStyle = {
+      ...modalStyle,
+      top: `${calculatedPosition.top}px`,
+      left: `${calculatedPosition.left}px`,
+    };
+  } else if (!position) {
+    // Use default centered position if no position prop provided
+    modalStyle = {
+      ...modalStyle,
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+    };
+  }
+  // Note: If position is provided but calculatedPosition is still null (very briefly on first render),
+  // the modal remains hidden due to opacity: 0
 
   return (
     <div style={modalStyle}>

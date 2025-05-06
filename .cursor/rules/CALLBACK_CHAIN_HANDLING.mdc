@@ -1,0 +1,95 @@
+# RivalRecon Celery Callback Chain Handling
+
+This document provides specific guidance on handling callback chains between Celery tasks in the RivalRecon application, focusing on the integration between Node.js and Python.
+
+## Core Principles
+
+1. **Task Function Signatures Must Handle Mixed Arguments**
+   - Node.js may not pass arguments in the expected order
+   - Python tasks should be defensive and handle various parameter arrangements
+
+2. **Return Object Structure Is Critical**
+   - Always include `submission_id` in the return value of tasks
+   - Nest important data in structured dictionaries to preserve context
+
+3. **Error Handling Must Not Break Chains**
+   - Wrap Supabase operations in try/except blocks
+   - Return valid response structures even in error cases
+   - Log errors but allow processing to continue when possible
+
+## Implementation Examples
+
+### 1. Handling Arguments in Any Order
+
+```python
+@shared_task(name="worker.scrape_reviews")
+def scrape_product_reviews(submission_id: str, url: str) -> Dict[str, Any]:
+    # Swap parameters if needed (when URL is in the submission_id position)
+    if submission_id and url and ('http' in submission_id and not 'http' in url):
+        submission_id, url = url, submission_id
+    
+    # Log the parameters we received
+    logger.info(f"Received scrape task with submission_id: {submission_id}, url: {url}")
+    
+    # Task implementation...
+```
+
+### 2. Extracting Submission ID from Dictionary Results
+
+```python
+@shared_task(name="worker.analyze_reviews")
+def analyze_reviews(submission_id: Union[str, Dict], url: str = None) -> Dict[str, Any]:
+    # Extract submission_id if a dictionary was passed from the previous task
+    if isinstance(submission_id, dict) and 'submission_id' in submission_id:
+        # Log what we received to aid debugging
+        logger.info(f"Received dictionary result from previous task: {submission_id}")
+        # Extract the actual ID from the dictionary
+        submission_id = submission_id.get('submission_id')
+        
+    # Log the extracted submission_id    
+    logger.info(f"Processing analysis for submission_id: {submission_id}")
+    
+    # Task implementation...
+```
+
+### 3. Handling Errors Without Breaking Chains
+
+```python
+try:
+    # Attempt Supabase operation
+    supabase.table('submissions').update({
+        'status': 'failed'
+    }).eq('id', submission_id).execute()
+except Exception as update_error:
+    # Log error but continue processing
+    logger.error(f"Error updating submission status: {update_error}")
+
+# Return consistent structure even in error case
+return {'status': 'error', 'data': {}, 'submission_id': submission_id}
+```
+
+## Common Pitfalls
+
+1. **Passing Entire Result Dictionary as Callback Argument**
+   - When task A completes and calls task B, Celery may pass A's entire result dictionary to B's first parameter
+   - Always check if the first parameter is a dictionary and extract the submission_id if needed
+
+2. **Parameter Order Mismatches**
+   - Node.js might create callbacks with parameters in a different order than the Python task expects
+   - Implement parameter validation and swapping logic in Python task functions
+
+3. **Database Schema Mismatches**
+   - Supabase table column names might differ from what the code expects
+   - Always validate schema assumptions and use try/except when interacting with the database
+
+## Testing Callback Chains
+
+To verify callback chains are working:
+
+1. Check logs for "Received dictionary result from previous task"
+2. Look for the extracted submission_id in subsequent logs
+3. Monitor task status with `celery -A worker.celery_app.app events`
+
+---
+
+This document was last updated on: May 1, 2025

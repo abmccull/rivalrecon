@@ -14,14 +14,26 @@ import {
   Download,
   Trash,
 } from 'lucide-react';
+import ErrorBoundary from '@/components/layout/ErrorBoundary';
 import RechartsLineChart from './RechartsLineChart';
 import RechartsBarChart from './RechartsBarChart';
-import { 
-  generateSentimentTrendData, 
-  generateFeatureComparisonData,
-  SentimentTrendDataPoint,
-  FeatureComparisonDataPoint
-} from '@/utils/mockAnalysisData';
+
+// Define interfaces for data structures
+interface SentimentTrendDataPoint {
+  name: string;
+  positive: number;
+  neutral: number;
+  negative: number;
+  overall: number;
+  [key: string]: number | string;
+}
+
+interface FeatureComparisonDataPoint {
+  name: string;
+  value: number;
+  comparison: number;
+  difference: number;
+}
 
 interface DataVisualizationsProps {
   analysis: any; // Will be properly typed once we know the final shape
@@ -32,15 +44,69 @@ export default function DataVisualizations({ analysis }: DataVisualizationsProps
   const [keyTermsFilter, setKeyTermsFilter] = useState('positive');
   const [sentimentData, setSentimentData] = useState<SentimentTrendDataPoint[]>([]);
   const [featureData, setFeatureData] = useState<FeatureComparisonDataPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   useEffect(() => {
-    // Load mock data
-    setSentimentData(generateSentimentTrendData());
-    setFeatureData(generateFeatureComparisonData());
-    
-    // In a real implementation, we would fetch this data from Supabase
-    // based on the analysis ID and any applied filters
-  }, []);
+    // In a real implementation, we would extract data from the analysis object
+    // or fetch from an API endpoint
+    try {
+      setLoading(true);
+      
+      if (!analysis) {
+        throw new Error('Analysis data is missing');
+      }
+      
+      // Here we'd process the real data from the analysis object
+      // For now, we'll set empty arrays to show the "no data" state
+      setSentimentData([]);
+      setFeatureData([]);
+      
+      // In a production app, we would set error states based on missing data
+      if (!sentimentData.length && !featureData.length) {
+        setError('No visualization data available for this analysis');
+      } else {
+        setError(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to process analysis data');
+    } finally {
+      setLoading(false);
+    }
+  }, [analysis]);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="lg:col-span-2 space-y-8">
+        <div className="bg-white rounded-lg shadow-md p-6 animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-6 animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="h-64 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if needed
+  if (error) {
+    return (
+      <div className="lg:col-span-2 space-y-8">
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <HelpCircle className="w-12 h-12 mx-auto text-gray-400" />
+              <h3 className="mt-2 text-lg font-medium text-gray-900">Data Unavailable</h3>
+              <p className="mt-1 text-sm text-gray-500">{error}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="lg:col-span-2 space-y-8">
@@ -49,32 +115,32 @@ export default function DataVisualizations({ analysis }: DataVisualizationsProps
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
             <TrendingUp className="text-[#2DD4BF] mr-2 h-5 w-5" />
-            <h2 className="text-lg font-bold text-[#1F2937]">Sentiment Trends</h2>
+            <h3 className="text-xl font-semibold">Sentiment Trends</h3>
           </div>
-          <div className="flex space-x-4">
-            <div className="relative">
-              <button className="flex items-center text-sm font-medium text-gray-600 bg-gray-100 px-3 py-1.5 rounded-md hover:bg-gray-200">
-                {sentimentFilter === 'weekly' ? 'Weekly' : sentimentFilter === 'monthly' ? 'Monthly' : 'Quarterly'}
-                <ChevronDown className="ml-1 h-4 w-4" />
-              </button>
-            </div>
-            <button className="text-gray-400 hover:text-gray-600">
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
+          <div className="relative">
+            <select 
+              className="bg-white border border-gray-300 rounded-md py-2 pl-3 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-[#2DD4BF]"
+              value={sentimentFilter}
+              onChange={(e) => setSentimentFilter(e.target.value)}
+            >
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           </div>
         </div>
         
         {sentimentData.length > 0 ? (
-          <RechartsLineChart
-            data={sentimentData}
-            title=""
-            height={280}
-          />
+          <ErrorBoundary>
+            <RechartsLineChart data={sentimentData} title="Sentiment Trends Over Time" />
+          </ErrorBoundary>
         ) : (
-          <div className="flex items-center justify-center h-64 w-full border border-dashed border-gray-300 rounded-lg">
-            <div className="text-center p-4">
-              <TrendingUp className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">Loading sentiment trends...</p>
+          <div className="flex items-center justify-center h-64 border-2 border-dashed border-gray-300 rounded-lg">
+            <div className="text-center">
+              <HelpCircle className="w-12 h-12 mx-auto text-gray-400" />
+              <h3 className="mt-2 text-lg font-medium text-gray-900">No Data Available</h3>
+              <p className="mt-1 text-sm text-gray-500">Sentiment trend data is not available</p>
             </div>
           </div>
         )}
@@ -85,109 +151,35 @@ export default function DataVisualizations({ analysis }: DataVisualizationsProps
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
             <BarChart3 className="text-[#2DD4BF] mr-2 h-5 w-5" />
-            <h2 className="text-lg font-bold text-[#1F2937]">Feature Comparison</h2>
+            <h3 className="text-xl font-semibold">Key Term Analysis</h3>
           </div>
-          <button className="text-gray-400 hover:text-gray-600">
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
+          <div className="relative">
+            <select 
+              className="bg-white border border-gray-300 rounded-md py-2 pl-3 pr-10 text-sm focus:outline-none focus:ring-1 focus:ring-[#2DD4BF]"
+              value={keyTermsFilter}
+              onChange={(e) => setKeyTermsFilter(e.target.value)}
+            >
+              <option value="positive">Positive Terms</option>
+              <option value="negative">Negative Terms</option>
+              <option value="trending">Trending Terms</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          </div>
         </div>
         
         {featureData.length > 0 ? (
-          <RechartsBarChart
-            data={featureData}
-            title=""
-            height={280}
-            showComparison={true}
-          />
+          <ErrorBoundary>
+            <RechartsBarChart data={featureData} title="Key Term Analysis" />
+          </ErrorBoundary>
         ) : (
-          <div className="flex items-center justify-center h-64 w-full border border-dashed border-gray-300 rounded-lg">
-            <div className="text-center p-4">
-              <BarChart3 className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">Loading feature comparison...</p>
+          <div className="flex items-center justify-center h-64 border-2 border-dashed border-gray-300 rounded-lg">
+            <div className="text-center">
+              <HelpCircle className="w-12 h-12 mx-auto text-gray-400" />
+              <h3 className="mt-2 text-lg font-medium text-gray-900">No Data Available</h3>
+              <p className="mt-1 text-sm text-gray-500">Key term analysis data is not available</p>
             </div>
           </div>
         )}
-      </div>
-      
-      {/* Key Terms Section */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center">
-            <Cloud className="text-[#2DD4BF] mr-2 h-5 w-5" />
-            <h2 className="text-lg font-bold text-[#1F2937]">Key Terms</h2>
-          </div>
-          <div className="flex space-x-4">
-            <div className="flex space-x-2">
-              <button 
-                className={`text-xs px-3 py-1 rounded-full ${
-                  keyTermsFilter === 'positive' 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                onClick={() => setKeyTermsFilter('positive')}
-              >
-                Positive
-              </button>
-              <button 
-                className={`text-xs px-3 py-1 rounded-full ${
-                  keyTermsFilter === 'negative' 
-                    ? 'bg-red-100 text-red-700' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                onClick={() => setKeyTermsFilter('negative')}
-              >
-                Negative
-              </button>
-              <button 
-                className={`text-xs px-3 py-1 rounded-full ${
-                  keyTermsFilter === 'neutral' 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-                onClick={() => setKeyTermsFilter('neutral')}
-              >
-                Neutral
-              </button>
-            </div>
-            <button className="text-gray-400 hover:text-gray-600">
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-        
-        <div className="h-64 w-full">
-          {/* Placeholder for word cloud visualization */}
-          <div className="flex items-center justify-center h-full w-full border border-dashed border-gray-300 rounded-lg">
-            <div className="text-center p-4">
-              <Cloud className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">Word cloud visualization will appear here</p>
-              <p className="text-xs text-gray-400 mt-1">Will be implemented with React 19-compatible library</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Recent Reviews Section */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center">
-            <MessageSquare className="text-[#2DD4BF] mr-2 h-5 w-5" />
-            <h2 className="text-lg font-bold text-[#1F2937]">Recent Reviews</h2>
-          </div>
-          <div className="flex space-x-2">
-            <button className="text-gray-400 hover:text-gray-600">
-              <Download className="h-5 w-5" />
-            </button>
-            <button className="text-gray-400 hover:text-gray-600">
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-        
-        <div className="space-y-4">
-          {/* Review items would go here */}
-          <p className="text-sm text-gray-500 text-center py-8">Recent reviews will be displayed here.</p>
-        </div>
       </div>
     </div>
   );

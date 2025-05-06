@@ -1,0 +1,1093 @@
+import { createClient } from '@/lib/supabase/server';
+import DashboardHeader from '@/components/layout/DashboardHeader';
+import { redirect } from 'next/navigation';
+import RatingsChartClient from '@/components/charts/RatingsChartClient';
+import RatingsTimelineChart from '@/components/charts/RatingsTimelineChart';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+// Define parameter types using Next.js 15 pattern
+type ReportParams = { id: string };
+
+// Generate static metadata for the page
+export async function generateMetadata({ params }: { params: ReportParams }) {
+  return {
+    title: `Report: ${params.id}`,
+  };
+}
+
+// Next.js 15 page component for dynamic routes
+export default async function ReportPage({ params }: { params: ReportParams }) {
+  // Validate route parameter
+  if (!params.id) {
+    redirect('/dashboard');
+  }
+
+  // Create the server-side Supabase client
+  const supabase = await createClient();
+
+  // Always use getUser() in server components for auth verification
+  const { data, error: authError } = await supabase.auth.getUser();
+  if (authError || !data?.user) {
+    redirect('/login');
+  }
+
+  // Debug: Log the report ID we're trying to fetch
+  console.log('Attempting to fetch report ID:', params.id);
+  console.log('Parameter type:', typeof params.id);
+  
+  // Initialize report variable
+  let report: any = null;
+  let fetchError: any = null;
+  
+  // Fetch the report by ID with joined submission data
+  try {
+    // Add more detailed logging
+    console.log('Executing Supabase query with ID:', params.id);
+    
+    // Ensure ID is properly formatted for query
+    const cleanId = params.id.trim();
+    console.log('Cleaned ID for query:', cleanId);
+    
+    // Query directly by submission_id as the user clarified this is the correct column
+    // But don't use .single() since there might be multiple analyses for one submission
+    console.log('Looking for analyses with submission_id:', cleanId);
+    const analysisResponse = await supabase
+      .from('analyses')
+      .select('*, submissions:submission_id(*)')
+      .eq('submission_id', cleanId)
+      .order('created_at', { ascending: false }); // Get the most recent first
+    
+    // Log the analysis response for debugging
+    console.log('Analysis query response:', JSON.stringify(analysisResponse));
+    
+    // If we have multiple analyses, take the most recent one (already sorted)
+    if (analysisResponse.data && analysisResponse.data.length > 0) {
+      console.log(`Found ${analysisResponse.data.length} analyses, using the most recent one`);
+      report = analysisResponse.data[0];
+      fetchError = analysisResponse.error;
+      
+      // Debug the actual data structure
+      console.log('Report data structure:', {
+        keys: Object.keys(report),
+        hasSubmissions: !!report.submissions,
+        submissionKeys: report.submissions ? Object.keys(report.submissions) : 'none',
+        hasInsights: !!report.key_insights,
+        insightsType: report.key_insights ? typeof report.key_insights : 'none',
+        insightsKeys: report.key_insights && typeof report.key_insights === 'object' ? Object.keys(report.key_insights) : 'none',
+        topPositives: report.top_positives ? typeof report.top_positives : 'none',
+        topNegatives: report.top_negatives ? typeof report.top_negatives : 'none',
+        opportunitiesType: report.improvement_opportunities ? typeof report.improvement_opportunities : 'none'
+      });
+      
+      // Define helper types for structured data
+      type ProductFeature = {
+        feature: string;
+        mention_count?: number;
+        positive_count: number;
+        negative_count: number;
+        neutral_count?: number;
+      };
+      
+      type Keyword = {
+        text: string;
+        value?: number;
+        sentiment: string;
+      };
+      
+      // Initialize data variables for the UI display
+      let sentimentPositive: number = 0;
+      let sentimentNegative: number = 0;
+      let sentimentNeutral: number = 0;
+      let avgRating: number = 0;
+      let reviewCount: number = 0;
+      let topPositives: string[] = [];
+      let topNegatives: string[] = [];
+      let keyThemes: any[] = []; // Use 'key_themes' field from analysis
+      let wordMap: Record<string, number> = {};
+      let trending: string | null = null;
+      let competitiveInsights: string[] = []; // Placeholder - source unclear
+      let improvementOpportunities: string[] = []; // Placeholder - source unclear
+      let productFeatures: ProductFeature[] = []; // Placeholder - source unclear
+      let keywords: Keyword[] = []; // Placeholder - source unclear
+      let ratingDistribution: Record<string, number> = {
+        '1': 0, '2': 0, '3': 0, '4': 0, '5': 0
+      };
+      let ratingsOverTime: Record<string, number> = {};
+
+      if (report) {
+        console.log("Raw report data fetched:", JSON.stringify(report, null, 2));
+
+        // Assign direct numeric/text fields from the 'analyses' table record
+        sentimentPositive = report.sentiment_positive_score ?? 0;
+        sentimentNegative = report.sentiment_negative_score ?? 0;
+        sentimentNeutral = report.sentiment_neutral_score ?? 0;
+        avgRating = report.average_rating ?? 0;
+        reviewCount = report.review_count ?? 0;
+        trending = report.trending ?? null;
+        
+        // Function to safely parse JSON string fields from the 'analyses' record
+        const safeJsonParse = (field: string, defaultValue: any = []) => {
+          if (report[field] && typeof report[field] === 'string') {
+            try {
+              const parsed = JSON.parse(report[field]);
+              console.log(`Successfully parsed JSON for ${field}`);
+              return parsed;
+            } catch (e) {
+              console.error(`Error parsing JSON for field ${field}:`, e, "Raw value:", report[field]);
+              return defaultValue; // Return default if parsing fails
+            }
+          } else if (report[field]) {
+            // If it's already an object/array (less likely with current backend but good practice)
+             console.log(`Field ${field} is already parsed.`);
+             return report[field];
+          }
+          console.log(`Field ${field} not found or not a string, using default.`);
+          return defaultValue; // Return default if field is missing or not a string
+        };
+
+        // Parse known JSON fields from the 'analyses' record
+        topPositives = safeJsonParse('top_positives', []);
+        topNegatives = safeJsonParse('top_negatives', []);
+        keyThemes = safeJsonParse('key_themes', []); // Themes are stored in 'key_themes'
+        ratingDistribution = safeJsonParse('rating_distribution', {'1':0, '2':0, '3':0, '4':0, '5':0});
+        ratingsOverTime = safeJsonParse('ratings_over_time', {});
+        wordMap = safeJsonParse('word_map', {});
+        
+        // --- Fields potentially missing from 'analyses' table --- 
+        // These fields are used later in the UI but their source in the 'report' object is unclear
+        // or they might not be populated by the backend worker yet. 
+        // Assign empty defaults for now.
+        competitiveInsights = report.competitive_insights ?? []; // Does 'analyses' table have this?
+        improvementOpportunities = report.opportunities ?? []; // UI uses report.opportunities, does 'analyses' table have this?
+        productFeatures = report.product_features ?? []; // Does 'analyses' table have this?
+        keywords = report.keywords ?? []; // Does 'analyses' table have this?
+        // --- End Missing Fields --- 
+
+        // Example: Accessing data from the joined 'submissions' table
+        const submissionProductName = report.submissions?.product_name ?? 'N/A';
+        console.log(`Submission Product Name: ${submissionProductName}`);
+
+        console.log('--- Processed Frontend Data ---', {
+          sentimentPositive,
+          sentimentNegative,
+          sentimentNeutral,
+          avgRating,
+          reviewCount,
+          trending,
+          ratingDistribution: JSON.stringify(ratingDistribution), // Log parsed value
+          ratingsOverTime: JSON.stringify(ratingsOverTime),
+          topPositives,
+          topNegatives,
+          keyThemes,
+          wordMap: JSON.stringify(wordMap),
+          competitiveInsights,
+          improvementOpportunities,
+          productFeatures,
+          keywords
+        });
+        console.log('--- End Processed Data Log ---');
+
+      } else {
+        console.log('Report data is null or undefined after fetch.');
+      }
+    } // <<< Added missing closing brace for the 'if (analysisResponse.data && ...)' block started on line 68
+
+      // Handle fetch errors gracefully with enhanced details
+      if (fetchError) {
+        // Use detailed error logging to better understand the issue
+        console.error('Error fetching report:', fetchError);
+        console.error('Error details:', {
+          code: fetchError.code,
+          message: fetchError.message,
+          details: fetchError.details,
+          hint: fetchError.hint,
+          // Add stringified error for complete visibility
+          fullError: JSON.stringify(fetchError)
+        });
+        
+        return (
+          <div className="p-8 max-w-4xl mx-auto">
+            <DashboardHeader />
+            <div className="bg-white rounded-lg shadow-md p-6 mt-6 text-center">
+              <h1 className="text-xl font-bold text-red-500 mb-4">Error Loading Report</h1>
+              <p className="text-gray-700 mb-4">We couldn't load the requested report data.</p>
+              <p className="text-sm text-gray-500">Error code: {fetchError.code || 'Unknown'}</p>
+              <p className="text-sm text-gray-500">Message: {fetchError.message || 'None'}</p>
+              <p className="text-sm text-gray-500">Details: {fetchError.details || 'None'}</p>
+              <p className="text-xs text-gray-400 mt-2">Report ID: {params.id}</p>
+            </div>
+          </div>
+        );
+      }
+      
+      // Handle report not found
+      if (!report) {
+        return (
+          <div className="p-8 max-w-4xl mx-auto">
+            <DashboardHeader />
+            <div className="bg-white rounded-lg shadow-md p-6 mt-6 text-center">
+              <h1 className="text-xl font-bold text-gray-800 mb-4">Report Not Found</h1>
+              <p className="text-gray-700">The report with ID {params.id} doesn't exist or has been removed.</p>
+            </div>
+          </div>
+        );
+      }
+  } catch (err) {
+    // Handle any unexpected errors during the fetch
+    console.error('Unexpected error fetching report:', err);
+    return (
+      <div className="p-8 max-w-4xl mx-auto">
+        <DashboardHeader />
+        <div className="bg-white rounded-lg shadow-md p-6 mt-6 text-center">
+          <h1 className="text-xl font-bold text-red-500 mb-4">Server Error</h1>
+          <p className="text-gray-700 mb-4">We encountered an unexpected error when loading the report.</p>
+          <p className="text-sm text-gray-500">Please try again later or contact support.</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // If null or empty values, could be different field names, let's check all properties
+  if (report?.submissions) {
+    console.log('All submission properties:', Object.keys(report.submissions));
+    console.log('All report properties:', Object.keys(report));
+  }
+  
+  // Prepare sentiment data based on sentiment_score
+  let sentimentData = {
+    positive: '0%',
+    neutral: '0%',
+    negative: '0%',
+    positiveNum: 0,
+    neutralNum: 0,
+    negativeNum: 0
+  };
+  
+  // Define helper variables to store parsed insights for display
+  let topPositives: string[] = [];
+  let topNegatives: string[] = [];
+  let keyThemes: string[] = [];
+  let competitiveInsights: string[] = [];
+  let keyTerms: string[] = [];
+  let improvementOpportunities: string[] = [];
+  let analyzedReviewsCount = 0;
+  let maxWordCount = 0;
+  let totalMentions = 0;
+  
+  // Initialize sentiment values
+  let sentimentPositive: number = 0;
+  let sentimentNegative: number = 0;
+  let sentimentNeutral: number = 0;
+  let avgRating: number = 0;
+  let reviewCount: number = 0;
+  
+  // Process rating distribution from report or use defaults
+  let ratingDistribution: Record<string, number> = {
+    '1': 0,
+    '2': 0,
+    '3': 0,
+    '4': 0,
+    '5': 0
+  };
+  
+  if (report) {
+    try {
+      // Try to extract the sentiment data from different possible fields
+      if (report.sentiment_distribution) {
+        // If we have a direct sentiment distribution field
+        try {
+          const sentimentData = typeof report.sentiment_distribution === 'string' 
+            ? JSON.parse(report.sentiment_distribution) 
+            : report.sentiment_distribution;
+            
+          sentimentPositive = sentimentData.positive || sentimentData.Positive || 0;
+          sentimentNegative = sentimentData.negative || sentimentData.Negative || 0;
+          sentimentNeutral = sentimentData.neutral || sentimentData.Neutral || 0;
+          
+          console.log('Using direct sentiment distribution:', { sentimentPositive, sentimentNegative, sentimentNeutral });
+        } catch (e) {
+          console.error('Error parsing sentiment_distribution:', e);
+        }
+      } else if (report.sentiment_score) {
+        // If we only have a sentiment score, generate distribution from it
+        try {
+          const score = parseFloat(typeof report.sentiment_score === 'string' ? report.sentiment_score : String(report.sentiment_score));
+          if (!isNaN(score)) {
+            sentimentPositive = Math.round(score * 100);
+            sentimentNegative = Math.round((1 - score) * 100 * 0.7); // Adjust negative proportion
+            sentimentNeutral = 100 - sentimentPositive - sentimentNegative;
+            sentimentNeutral = Math.max(0, sentimentNeutral);
+            
+            console.log('Generated sentiment from score:', { sentimentPositive, sentimentNegative, sentimentNeutral });
+          }
+        } catch (e) {
+          console.error('Error calculating sentiment from score:', e);
+        }
+      }
+      
+      // Try to get rating distribution
+      // First check if we have direct rating distribution
+      if (report.rating_distribution) {
+        try {
+          const ratingData = typeof report.rating_distribution === 'string' 
+            ? JSON.parse(report.rating_distribution) 
+            : report.rating_distribution;
+            
+          console.log('Raw rating distribution data:', ratingData);
+          
+          // Get raw counts in a consistent format
+          const rawCounts: Record<string, number> = {};
+          
+          // Check if it's an array or object format
+          if (Array.isArray(ratingData)) {
+            // If array, assume format is [5-star count, 4-star count, etc.]
+            for (let i = 0; i < Math.min(ratingData.length, 5); i++) {
+              rawCounts[String(5-i)] = ratingData[i] || 0;
+            }
+          } else {
+            // Handle different possible key formats: '5', '5_star', etc.
+            for (let i = 1; i <= 5; i++) {
+              const stringKey = String(i);
+              rawCounts[stringKey] = 
+                ratingData[stringKey] || // '5'
+                ratingData[i] || // 5
+                ratingData[`${i}_star`] || // '5_star'
+                ratingData[`${i}_stars`] || // '5_stars'
+                ratingData[`${stringKey}_star`] || // '5_star'
+                ratingData[`${stringKey}_stars`] || // '5_stars'
+                0;
+            }
+          }
+          
+          console.log('Raw rating counts:', rawCounts);
+          
+          // Calculate raw counts total
+          const totalCount = Object.values(rawCounts).reduce(
+            (sum: number, count: number) => sum + count, 0
+          );
+          console.log('Total ratings count:', totalCount);
+          
+          // Convert raw counts to percentages
+          if (totalCount > 0) {
+            // Calculate percentages
+            for (let i = 1; i <= 5; i++) {
+              const stringKey = String(i);
+              const count = rawCounts[stringKey] || 0;
+              // Store as percentages in the ratingDistribution object
+              ratingDistribution[stringKey] = Math.round((count / totalCount) * 100);
+            }
+            
+            // Calculate average rating
+            avgRating = Object.entries(rawCounts).reduce(
+              (sum: number, [key, count]: [string, number]) => sum + (parseInt(key) * count), 0
+            ) / totalCount;
+            
+            // Round to one decimal place
+            avgRating = Math.round(avgRating * 10) / 10;
+          }
+        } catch (error) {
+          console.error('Error processing rating distribution:', error);
+        }
+        
+        console.log('Calculated rating percentages:', ratingDistribution, 'Avg:', avgRating);
+      } 
+    } else if (report.average_rating || report.avg_rating) {
+      // If we only have average rating, generate plausible distribution
+      try {
+        const avgRatingValue = parseFloat(report.average_rating || report.avg_rating || '0');
+        if (!isNaN(avgRatingValue)) {
+          avgRating = avgRatingValue;
+          
+          // Generate distribution based on the average
+          const baseValue = avgRatingValue; // between 1-5
+          ratingDistribution['5'] = Math.round(Math.min(100, baseValue >= 4.5 ? 60 : baseValue >= 4 ? 40 : 20));
+          ratingDistribution['4'] = Math.round(Math.min(100, baseValue >= 4 ? 30 : baseValue >= 3.5 ? 40 : 20));
+          ratingDistribution['3'] = Math.round(Math.min(100, baseValue >= 4 ? 5 : baseValue >= 3 ? 25 : 30));
+          ratingDistribution['2'] = Math.round(Math.min(100, baseValue >= 4.5 ? 3 : baseValue >= 3.5 ? 10 : 20));
+          ratingDistribution['1'] = Math.round(Math.min(100, baseValue >= 4 ? 2 : baseValue >= 3 ? 5 : 10));
+          
+          // Normalize to 100%
+          const total = Object.values(ratingDistribution).reduce((sum, value) => sum + value, 0);
+          if (total > 0) {
+            Object.keys(ratingDistribution).forEach(key => {
+              ratingDistribution[key] = Math.round((ratingDistribution[key] / total) * 100);
+            });
+          }
+          
+          console.log('Using direct rating distribution:', ratingDistribution, 'Avg:', avgRating);
+        }
+      } catch (e) {
+        console.error('Error generating rating distribution from average:', e);
+        }
+      } else if (report.average_rating || report.avg_rating) {
+        // If we only have average rating, generate plausible distribution
+        try {
+          const avgRatingValue = parseFloat(report.average_rating || report.avg_rating || '0');
+          if (!isNaN(avgRatingValue)) {
+            avgRating = avgRatingValue;
+            
+            // Generate distribution based on the average
+            const baseValue = avgRatingValue; // between 1-5
+            ratingDistribution['5'] = Math.round(Math.min(100, baseValue >= 4.5 ? 60 : baseValue >= 4 ? 40 : 20));
+            ratingDistribution['4'] = Math.round(Math.min(100, baseValue >= 4 ? 30 : baseValue >= 3.5 ? 40 : 20));
+            ratingDistribution['3'] = Math.round(Math.min(100, baseValue >= 4 ? 5 : baseValue >= 3 ? 25 : 30));
+            ratingDistribution['2'] = Math.round(Math.min(100, baseValue >= 4.5 ? 3 : baseValue >= 3.5 ? 10 : 20));
+            ratingDistribution['1'] = Math.round(Math.min(100, baseValue >= 4 ? 2 : baseValue >= 3 ? 5 : 10));
+            
+            // Normalize to 100%
+            const total = Object.values(ratingDistribution).reduce((sum, value) => sum + value, 0);
+            if (total > 0) {
+              Object.keys(ratingDistribution).forEach(key => {
+                ratingDistribution[key] = Math.round((ratingDistribution[key] / total) * 100);
+              });
+            }
+            
+            console.log('Generated rating distribution from average:', ratingDistribution);
+          }
+        } catch (e) {
+          console.error('Error generating rating distribution from average:', e);
+        }
+      }
+    } catch (e) {
+      console.error('Error processing report data for charts:', e);
+    }
+  }
+
+  // Get review count directly from the database field
+  // We no longer try to estimate it from word_map data as that can be inaccurate
+  if (report && report.review_count) {
+    try {
+      // If review_count is provided directly, use it
+      reviewCount = typeof report.review_count === 'string' 
+        ? parseInt(report.review_count, 10) 
+        : report.review_count;
+      
+      console.log('Using review_count directly from database:', reviewCount);
+    } catch (error) {
+      console.error('Error parsing review_count:', error);
+      reviewCount = 0;
+    }
+  } else {
+    // If not available, fall back to calculating from rating_distribution
+    // (which we already do elsewhere in the code when processing rating_distribution)
+    console.log('No direct review_count available, will use total from rating_distribution if available');
+  }
+
+  // Derive sentiment distribution from sentiment_score
+  if (report && report.sentiment_score !== null) {
+    try {
+      // The sentiment_score is a value between 0 and 1 where higher is more positive
+      const score = parseFloat(report.sentiment_score as string);
+      
+      if (!isNaN(score)) {
+        // Calculate a simple distribution based on the sentiment score
+        sentimentData.positiveNum = Math.round(score * 100);
+        sentimentData.negativeNum = Math.round((1 - score) * 100 * 0.7); // Adjust negative proportion
+        sentimentData.neutralNum = 100 - sentimentData.positiveNum - sentimentData.negativeNum;
+        
+        // Ensure no negative values
+        sentimentData.neutralNum = Math.max(0, sentimentData.neutralNum);
+        
+        // Format as percentages
+        sentimentData.positive = sentimentData.positiveNum + '%';
+        sentimentData.neutral = sentimentData.neutralNum + '%';
+        sentimentData.negative = sentimentData.negativeNum + '%';
+        
+        console.log('Generated sentiment data from score:', score, sentimentData);
+      }
+    } catch (e) {
+      console.error('Error calculating sentiment data:', e);
+    }
+  }
+
+  const fullTitle = report?.display_name || report?.name || 'Report Details';
+  const truncatedTitle = fullTitle.length > 100
+    ? `${fullTitle.substring(0, 100)}...`
+    : fullTitle;
+
+  // Safely attempt to parse JSON fields
+  // Ensure this runs AFTER fetching the report
+  const fieldsToParse = [
+    'rating_distribution',
+    'ratings_over_time',
+    'top_positives',
+    'top_negatives',
+    'themes',
+    'word_map',
+    'feature_analysis', // Example: Assume this might be JSON
+    'category_analysis', // Example
+    'comparison_data', // Example
+    'competitive_insights', // Example
+    'opportunities' // Example (Improvement Opportunities)
+    // DO NOT parse 'sentiment_score', 'sentiment_positive_score', etc. here - handle below
+  ];
+
+  fieldsToParse.forEach(field => {
+    if (report[field] && typeof report[field] === 'string') {
+      // Check if the string looks like JSON (basic check)
+      const maybeJson = report[field].trim();
+      if ((maybeJson.startsWith('{') && maybeJson.endsWith('}')) || (maybeJson.startsWith('[') && maybeJson.endsWith(']'))) {
+        try {
+          report[field] = JSON.parse(report[field]);
+          console.log(`Successfully parsed ${field}`);
+        } catch (e) {
+          console.error(`Error parsing ${field} as JSON:`, e, `Raw value: ${report[field]}`);
+          // Keep the original string if parsing fails
+        }
+      }
+    }
+  });
+  
+  // Special handling for text fields that should never be parsed as JSON
+  ['key_insights', 'summary', 'trending'].forEach(field => {
+    // These fields are plain text and should not be parsed as JSON
+    if (report[field] && typeof report[field] === 'object') {
+      console.warn(`Field ${field} was unexpectedly an object, converting back to string.`);
+      report[field] = JSON.stringify(report[field]); // Attempt to convert back
+    }
+  });
+
+  // --- Process Sentiment Data --- NEW LOGIC ---
+  // Use the dedicated sentiment scores from DeepSeek analysis
+  if (typeof report.sentiment_positive_score === 'number' && 
+      typeof report.sentiment_negative_score === 'number' &&
+      typeof report.sentiment_neutral_score === 'number') {
+        
+    sentimentPositive = Math.round((report.sentiment_positive_score || 0) * 100);
+    sentimentNegative = Math.round((report.sentiment_negative_score || 0) * 100);
+    sentimentNeutral = Math.round((report.sentiment_neutral_score || 0) * 100);
+    
+    // Optional: Sanity check if they roughly add up to 100
+    const totalSentiment = sentimentPositive + sentimentNegative + sentimentNeutral;
+    if (Math.abs(totalSentiment - 100) > 2) { // Allow for rounding differences
+      console.warn(`Sentiment scores (${sentimentPositive}%, ${sentimentNegative}%, ${sentimentNeutral}%) do not sum close to 100%. Total: ${totalSentiment}%`);
+      // Optional: Normalize if needed, though backend should enforce sum=1.0
+      // const factor = 100 / totalSentiment;
+      // sentimentPositive = Math.round(sentimentPositive * factor);
+      // sentimentNegative = Math.round(sentimentNegative * factor);
+      // sentimentNeutral = 100 - sentimentPositive - sentimentNegative; // Ensure sum is exactly 100
+    }
+    console.log(`Using DeepSeek sentiment scores: P: ${sentimentPositive}%, N: ${sentimentNegative}%, Neu: ${sentimentNeutral}%`);
+
+  } else {
+     // Fallback: If specific scores are missing, calculate from rating distribution (OLD BEHAVIOR - LESS IDEAL)
+     console.warn("Sentiment scores (positive/negative/neutral) not found or invalid in report data. Falling back to rating distribution for sentiment display.");
+     const dist = report.rating_distribution || {};
+     const totalRatings = Object.values(dist).reduce((sum: number, count: any) => sum + (Number(count) || 0), 0);
+     if (totalRatings > 0) {
+       const positiveCount = (Number(dist['5']) || 0) + (Number(dist['4']) || 0);
+       const neutralCount = Number(dist['3']) || 0;
+       const negativeCount = (Number(dist['2']) || 0) + (Number(dist['1']) || 0);
+       
+       sentimentPositive = Math.round((positiveCount / totalRatings) * 100);
+       sentimentNeutral = Math.round((neutralCount / totalRatings) * 100);
+       sentimentNegative = 100 - sentimentPositive - sentimentNeutral; // Ensure sum is 100
+     } else {
+        sentimentPositive = 0;
+        sentimentNegative = 0;
+        sentimentNeutral = 0;
+     }
+  }
+  // --- End Process Sentiment Data ---
+
+  // Process average rating (should be calculated locally)
+  avgRating = report.average_rating || 0;
+
+  // Process rating distribution (should be calculated locally)
+  ratingDistribution = report.rating_distribution || {};
+  // Ensure distribution has all keys 1-5
+  for (let i = 1; i <= 5; i++) {
+    const key = String(i);
+    ratingDistribution[key] = Number(ratingDistribution[key]) || 0;
+  }
+
+  // Process timeline data (should be calculated locally)
+  const timelineData = (report.ratings_over_time && Array.isArray(report.ratings_over_time))
+    ? report.ratings_over_time
+    : [];
+  
+  // Log processed data for verification
+  console.log('Processed Sentiment:', { P: sentimentPositive, Neg: sentimentNegative, Neu: sentimentNeutral });
+  console.log('Processed Avg Rating:', avgRating);
+  console.log('Processed Distribution Keys:', Object.keys(ratingDistribution));
+  console.log('Processed Timeline entries:', timelineData.length);
+
+  return (
+    <div className="min-h-screen bg-[#F7FAFC]">
+      {/* Pass submission data to header for refresh functionality */}
+      <DashboardHeader 
+        submissionId={report?.submission_id} 
+        submissionStatus={report?.submissions?.status}
+      />
+
+      {/* Main Content */}
+      <main className="container mx-auto px-4 md:px-6 py-8">
+        {/* Error state - handled above with early return */}
+        
+        {/* Loading state */}
+        {!report && !fetchError && (
+          <div className="flex justify-center items-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        )}
+        
+        {/* Report content */}
+        {report && (
+          <>
+            {/* Breadcrumbs & Title with Action Buttons */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+              <div className="mb-4">
+                <h1
+                  className="text-2xl md:text-3xl font-bold text-gray-900 truncate"
+                  title={fullTitle.length > 100 ? fullTitle : undefined}
+                >
+                  {truncatedTitle}
+                </h1>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex space-x-3">
+                <button 
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2DD4BF]"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Export
+                </button>
+                <button 
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2DD4BF]"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share
+                </button>
+                <button 
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2DD4BF]"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
+              </div>
+            </div>
+            
+            {/* Analysis Summary */}
+            <div id="analysis-summary" className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
+                <div className="mb-4 md:mb-0">
+                  <h2 className="text-xl font-bold text-[#1F2937] mb-1">{report.display_name || report.submissions?.product_name || 'Product Analysis'}</h2>
+                  <div className="flex items-center">
+                    {report.submissions?.source && (
+                      <span className={`${report.submissions.source === 'amazon' ? 'text-orange-500' : 'text-blue-500'} mr-2 capitalize`}>{report.submissions.source}</span>
+                    )}
+                    {report.submissions?.url && (
+                      <>
+                        <a 
+                          href={report.submissions.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline text-sm cursor-pointer truncate max-w-[300px]"
+                        >
+                          {report.submissions.url}
+                        </a>
+                        {/* Simple non-interactive icon (no onClick in Server Component) */}
+                        <span className="ml-2 text-gray-400 text-sm">📋</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <div className="flex flex-col items-center">
+                    <span className="text-sm text-gray-500">Last Updated</span>
+                    <span className="font-medium">{new Date(report.created_at || Date.now()).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-sm text-gray-500">Reviews Analyzed</span>
+                    <span className="font-medium">
+                      {/* Display the review count calculated from rating distribution or report data */}
+                      {reviewCount || 0}
+                    </span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-sm text-gray-500">Avg. Rating</span>
+                    <div className="flex items-center">
+                      <span className="font-medium mr-1">{(avgRating || report.average_rating || report.avg_rating || 0).toFixed(1)}</span>
+                      <div className="flex text-yellow-400">
+                        {[1, 2, 3, 4, 5].map((star) => {
+                          const ratingValue = avgRating || report.average_rating || report.avg_rating || 0;
+                          return (
+                            <span key={star} className="text-sm">
+                              {star <= Math.floor(ratingValue) ? '★' : 
+                               star - 0.5 <= ratingValue ? '★' : '☆'}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div id="sentiment-overview" className="bg-[#F7FAFC] rounded-lg p-4">
+                  <h3 className="font-medium text-[#1F2937] mb-3">Sentiment Overview</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-500">Positive</span>
+                      <div className="flex items-center">
+                        <span className="font-bold text-green-600 text-lg">{sentimentPositive || 0}%</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-500">Neutral</span>
+                      <div className="flex items-center">
+                        <span className="font-bold text-gray-600 text-lg">{sentimentNeutral || 0}%</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm text-gray-500">Negative</span>
+                      <div className="flex items-center">
+                        <span className="font-bold text-red-600 text-lg">{sentimentNegative || 0}%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
+                    <div className="bg-green-500 h-2.5 rounded-l-full" style={{ width: `${sentimentPositive || 0}%` }}></div>
+                    <div className="bg-gray-400 h-2.5" style={{ width: `${sentimentNeutral || 0}%`, marginLeft: `${sentimentPositive || 0}%` }}></div>
+                    <div className="bg-red-500 h-2.5 rounded-r-full" style={{ width: `${sentimentNegative || 0}%`, marginLeft: `${(sentimentPositive || 0) + (sentimentNeutral || 0)}%` }}></div>
+                  </div>
+                </div>
+                
+                <div id="rating-distribution" className="bg-[#F7FAFC] rounded-lg p-4">
+                  <h3 className="font-medium text-[#1F2937] mb-3">Rating Distribution</h3>
+                  <div className="space-y-2">
+                    {(() => {
+                      // Calculate percentages from raw counts if needed
+                      let percentages: Record<string, number> = {};
+                      
+                      // Check if we have raw counts in ratingDistribution
+                      const values = Object.values(ratingDistribution || {});
+                      const sum = values.reduce((acc, val) => acc + Number(val), 0);
+                      
+                      // If values are likely raw counts (sum much less than 500),
+                      // convert them to percentages
+                      if (sum > 0 && sum < 50) {
+                        console.log('Converting raw counts to percentages. Total:', sum);
+                        // Calculate percentages
+                        for (let i = 1; i <= 5; i++) {
+                          const stringKey = String(i);
+                          const count = Number(ratingDistribution?.[stringKey] || 0);
+                          percentages[stringKey] = Math.round((count / sum) * 100);
+                        }
+                      } else {
+                        // Assume values are already percentages
+                        percentages = ratingDistribution || {};
+                      }
+                      
+                      console.log('Final percentages for display:', percentages);
+                      
+                      // Render the rating bars
+                      return [5, 4, 3, 2, 1].map((rating) => {
+                        const stringRating = rating.toString();
+                        const percentage = percentages[stringRating] || 0;
+                        
+                        return (
+                          <div key={rating} className="flex items-center">
+                            <span className="text-sm w-8">{rating}★</span>
+                            <div className="flex-1 mx-2">
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div 
+                                  className="bg-[#2DD4BF] h-2 rounded-full" 
+                                  style={{ width: `${percentage}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                            <span className="text-sm text-gray-600">{percentage}%</span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+                
+                <div id="competitive-position" className="bg-white shadow rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Product Details</h3>
+                  
+                  {/* Simple flex layout for label-value pairs */}
+                  <div className="space-y-3">
+                    {/* Category */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-500">Category</span>
+                      <span className="text-sm text-gray-900 truncate" title={report?.submissions?.category_name ?? 'N/A'}>
+                        {report?.submissions?.category_name ?? 'N/A'}
+                      </span>
+                    </div>
+                    
+                    {/* Brand */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-500">Brand</span>
+                      <span className="text-sm text-gray-900">
+                        {report?.submissions?.brand_name ?? 'N/A'}
+                      </span>
+                    </div>
+                    
+                    {/* Price */}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium text-gray-500">Price</span>
+                      <span className="text-sm text-gray-900">
+                        {report?.submissions?.price ? `$${parseFloat(report.submissions.price).toFixed(2)}` : 'N/A'}
+                      </span>
+                    </div>
+                    
+                    {/* Product URL */}
+                    {report?.submissions?.url && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-500">Product URL</span>
+                        <a 
+                          href={report.submissions?.url ?? '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          View Original
+                        </a>
+                      </div>
+                    )}
+                    
+                    {/* Total Reviews - only if available */}
+                    {report?.submissions?.review_count !== null && report?.submissions?.review_count !== undefined && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-500">Total Reviews</span>
+                        <span className="text-sm text-gray-900">{report.submissions.review_count}</span>
+                      </div>
+                    )}
+                    
+                    {/* Source field removed as requested */}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Side-by-side Product Overview and Key Topics */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 mt-20">
+              {/* Left: Product Overview */}
+              <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-[#1E3A8A]">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-[#1F2937]">
+                    <span className="text-[#1E3A8A] mr-2">📋</span>
+                    Product Overview
+                  </h2>
+                </div>
+                <p className="text-gray-700 leading-relaxed">
+                  {report.summary || 'No product summary available.'}
+                </p>
+              </div>
+              
+              {/* Right: Key Topics (Consolidated) */}
+              <div id="key-topics" className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-[#1F2937]">
+                    <span className="text-[#2DD4BF] mr-2">☁️</span>
+                    Key Topics
+                  </h2>
+                </div>
+                
+                <div className="space-y-4">
+                  {/* Key Themes Tags */}
+                  <div>
+                    <h3 className="text-sm font-medium text-[#1F2937] mb-2">Key Themes</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {keyThemes && keyThemes.map((theme: string, index: number) => (
+                        <span key={index} className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                          {theme}
+                        </span>
+                      ))}
+                      {(!keyThemes || keyThemes.length === 0) && (
+                        <p className="text-gray-500 italic">No key themes available</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Word Cloud */}
+                  <div>
+                    <h3 className="text-sm font-medium text-[#1F2937] mb-2">Frequently Mentioned Terms</h3>
+                    {report.word_map && Object.keys(report.word_map).length > 0 ? (
+                      <div className="bg-[#F7FAFC] rounded-lg p-4 flex flex-wrap content-center justify-center gap-3">
+                        {Object.entries(report.word_map).map(([word, count]: [string, any], index: number) => {
+                          // Determine size based on count
+                          const size = parseInt(count as string);
+                          const fontSize = Math.max(12, Math.min(22, 12 + (size / 3)));
+                          const fontWeight = size > 10 ? 'font-bold' : size > 5 ? 'font-medium' : 'font-normal';
+                          
+                          // Alternate colors for visual interest
+                          const colors = ['text-[#2DD4BF]', 'text-[#1E3A8A]', 'text-gray-700'];
+                          const colorClass = colors[index % colors.length];
+                          
+                          return (
+                            <span 
+                              key={index} 
+                              className={`${colorClass} ${fontWeight}`} 
+                              style={{ fontSize: `${fontSize}px` }}
+                            >
+                              {word}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 italic">No keyword data available</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Main Analysis Content */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              {/* Left Column - Key Insights remains empty for layout balance */}
+              <div id="key-insights-column" className="lg:col-span-1 space-y-8">
+              </div>
+              
+              {/* Center & Right Columns */}
+              <div id="data-visualizations" className="lg:col-span-3 space-y-6">
+                {/* Ratings Over Time Chart */}
+                {report.ratings_over_time && Object.keys(report.ratings_over_time).length > 0 && (
+                  <div id="ratings-trend" className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold text-[#1F2937]">
+                        <span className="text-[#2DD4BF] mr-2">📈</span>
+                        Ratings Trend
+                      </h2>
+                    </div>
+                    <RatingsTimelineChart 
+                      data={report.ratings_over_time} 
+                      trend={report.trending} 
+                    />
+                  </div>
+                )}
+                
+                {/* Top Insights Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Top Positives */}
+                  <div id="key-positives" className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold text-[#1F2937]">
+                        <span className="text-green-500 mr-2">✓</span>
+                        Top Positives
+                      </h2>
+                    </div>
+                    <div className="space-y-3">
+                      {report.top_positives && report.top_positives.map((positive: string, index: number) => (
+                        <div key={index} className="border-l-4 border-green-500 pl-3 py-1">
+                          <p className="text-gray-700">{positive}</p>
+                        </div>
+                      ))}
+                      {(!report.top_positives || report.top_positives.length === 0) && (
+                        <p className="text-gray-500 italic">No positive insights available</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Top Negatives */}
+                  <div id="key-negatives" className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold text-[#1F2937]">
+                        <span className="text-red-500 mr-2">✗</span>
+                        Top Negatives
+                      </h2>
+                    </div>
+                    <div className="space-y-3">
+                      {report.top_negatives && report.top_negatives.map((negative: string, index: number) => (
+                        <div key={index} className="border-l-4 border-red-500 pl-3 py-1">
+                          <p className="text-gray-700">{negative}</p>
+                        </div>
+                      ))}
+                      {(!report.top_negatives || report.top_negatives.length === 0) && (
+                        <p className="text-gray-500 italic">No negative insights available</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Analysis Insights Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                  {/* Competitive Insights */}
+                  <div id="competitive-insights" className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold text-[#1F2937]">
+                        <span className="text-[#2DD4BF] mr-2">⚔️</span>
+                        Competitive Insights
+                      </h2>
+                    </div>
+                    <div className="space-y-3">
+                      {report.competitive_insights && report.competitive_insights.map((insight: string, index: number) => (
+                        <div key={index} className="flex items-start">
+                          <span className="text-[#2DD4BF] mt-1 mr-2">•</span>
+                          <p className="text-gray-700">{insight}</p>
+                        </div>
+                      ))}
+                      {(!report.competitive_insights || report.competitive_insights.length === 0) && (
+                        <p className="text-gray-500 italic">No competitive insights available</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Improvement Opportunities */}
+                  <div id="improvement-opportunities" className="bg-white rounded-lg shadow-md p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-bold text-[#1F2937]">
+                        <span className="text-[#2DD4BF] mr-2">🎯</span>
+                        Improvement Opportunities
+                      </h2>
+                    </div>
+                    <div className="space-y-4">
+                      {report.opportunities && report.opportunities.map((opportunity: string, index: number) => {
+                        // Determine priority based on position in the array
+                        const priority = index === 0 ? 'High' : index === 1 ? 'Medium' : 'Standard';
+                        const bgColor = index === 0 ? 'bg-red-50' : index === 1 ? 'bg-yellow-50' : 'bg-blue-50';
+                        const priorityColor = index === 0 ? 'bg-red-100 text-red-800' : index === 1 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800';
+                        
+                        return (
+                          <div key={index} className={`${bgColor} p-4 rounded-md`}>
+                            <p className="text-gray-700 text-sm mb-2">{opportunity}</p>
+                            <div className="flex items-center mt-2">
+                              <span className={`text-xs ${priorityColor} px-2 py-1 rounded`}>
+                                {priority} Priority
+                              </span>
+                              <span className="text-xs text-gray-500 ml-auto">
+                                Impact Score: {Math.round(10 - (index * 1.5))}/10
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {(!report.opportunities || report.opportunities.length === 0) && (
+                        <p className="text-gray-500 italic">No improvement opportunities available</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Raw Report data (hidden in production, kept for development) */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8 hidden">
+              <h2 className="text-lg font-bold text-[#1F2937] mb-4">Debug: Raw Report Data</h2>
+              <pre className="bg-[#F7FAFC] rounded p-4 text-sm text-gray-800 overflow-x-auto">
+                {JSON.stringify(report, null, 2)}
+              </pre>
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}

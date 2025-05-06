@@ -5,7 +5,7 @@ BEGIN
   -- Make HTTP request to our webhook
   PERFORM
     net.http_post(
-      url := 'https://your-backend-domain.com/webhooks/submission-created',
+      url := 'https://c26f-73-20-72-85.ngrok-free.app/webhooks/submission-created',
       body := json_build_object(
         'record', row_to_json(NEW),
         'type', TG_OP,

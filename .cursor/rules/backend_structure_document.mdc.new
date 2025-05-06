@@ -1,0 +1,310 @@
+---
+description: Apply these rules when making changes to the backend architecture
+globs: ["*.js", "*.py"]
+alwaysApply: false
+---
+
+# RivalRecon Backend Architecture Document
+
+This document outlines the comprehensive backend architecture for the RivalRecon application, which uses a hybrid approach with Node.js, Python Celery workers, Supabase, and Redis.
+
+## Architecture Overview
+
+RivalRecon utilizes a distributed architecture with the following key components:
+
+1. **Node.js Backend** - Handles HTTP requests, webhooks, and task queuing
+2. **Python Celery Workers** - Process asynchronous tasks like scraping and analysis
+3. **Supabase** - Provides database storage, authentication, and real-time functionality
+4. **Redis** - Acts as message broker between Node.js and Celery workers
+
+This architecture enables efficient processing of computationally intensive tasks while maintaining a responsive user interface.
+
+## System Component Interactions
+
+```
+┌───────────────┐       ┌──────────┐        ┌─────────────────┐
+│  Next.js App  │◄──────┤ Supabase │◄───────┤ Python Workers  │
+│  (Node.js)    │──────►│ Database │───────►│ (Celery)        │
+└───────┬───────┘       └──────────┘        └────────┬────────┘
+        │                                            │
+        │                                            │
+        ▼                                            ▼
+┌───────────────┐                            ┌───────────────┐
+│  Webhooks &   │                            │   Worker      │
+│  API Routes   │                            │   Tasks       │
+└───────┬───────┘                            └────────┬──────┘
+        │                                             │
+        │       ┌───────────────┐                     │
+        └──────►│   Redis       │◄────────────────────┘
+                │  Message Queue│
+                └───────────────┘
+```
+
+## Directory Structure
+
+```
+/Rival Recon3/
+├── .env                  # Master environment variables file (project root)
+├── app/                  # Next.js frontend
+├── backend/              # Backend services
+│   ├── __init__.py       # Python package initialization
+│   ├── index.js          # Node.js main entry point
+│   ├── routes/           # Express.js routes
+│   │   ├── webhooks.js   # Webhook handlers for submissions
+│   │   └── ...
+│   ├── services/         # Node.js service modules
+│   │   ├── taskManager.js # Manages task creation and queuing
+│   │   ├── supabaseService.js # Supabase interaction wrapper
+│   │   └── ...
+│   └── worker/           # Python Celery worker components
+│       ├── __init__.py   # Package initialization
+│       ├── celery_app.py # Celery application configuration
+│       ├── tasks.py      # Task definitions for analysis
+│       ├── worker.py     # Core scraping implementation
+│       └── recurring_scheduler.py # Scheduled task management
+```
+
+## Node.js Backend
+
+The Node.js backend serves as the primary entry point for handling HTTP requests, webhooks, and queueing tasks for the Celery workers.
+
+### Key Components
+
+1. **Express Server (index.js)**
+   - Listens on configured port (default 3001)
+   - Sets up middleware and routes
+   - Establishes Redis connections
+
+2. **Webhook Handlers (routes/webhooks.js)**
+   - Process incoming webhooks from Supabase
+   - Queue appropriate tasks based on webhook data
+   - Return appropriate status responses
+
+3. **Task Manager (services/taskManager.js)**
+   - Creates Celery-compatible task messages
+   - Queues tasks to Redis using proper naming convention
+   - Sets up callbacks between tasks
+
+### Task Queuing Flow
+
+When a new submission comes in via webhook:
+
+```javascript
+// Example from webhooks.js
+// Queue the scrape_reviews Celery task using TaskManager
+const taskId = await taskManager.queueScrapeTask(
+  record.id,  // submission_id
+  record.url  // product URL to scrape
+);
+
+logger.info(`Queued scrape_reviews task (${taskId}) for submission ${record.id}`);
+```
+
+The `taskManager.js` handles the creation and queuing of Celery-compatible tasks:
+
+```javascript
+// Example from taskManager.js
+async queueScrapeTask(submissionId, url) {
+  // Create task message with callback to analyze_reviews
+  const message = this.createTaskMessage(
+    'worker.scrape_reviews', 
+    [submissionId, url],
+    { 
+      callbacks: [
+        {
+          task: 'worker.analyze_reviews',
+          args: [submissionId]
+        }
+      ]
+    }
+  );
+  
+  // Queue task to Redis
+  return await this.queueTask(message);
+}
+```
+
+## Python Celery Worker System
+
+The Celery worker system processes asynchronous tasks queued by the Node.js backend, handling computationally intensive operations like web scraping and sentiment analysis.
+
+### Key Components
+
+1. **Celery Application (celery_app.py)**
+   - Configures Celery settings and environment
+   - Defines task schedules for recurring operations
+   - Loads environment variables from root `.env` file
+   - Includes task modules for discovery
+
+```python
+# celery_app.py
+app = Celery(
+    'rival_recon_worker',
+    broker=os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
+    include=['worker.tasks', 'worker.recurring_scheduler', 'worker.worker']
+)
+```
+
+2. **Worker Implementation (worker.py)**
+   - Contains robust implementation of scraping functionality
+   - Uses asyncio for efficient concurrent operations
+   - Handles product details and review extraction
+   - Updates Supabase database with results
+
+```python
+# worker.py
+@app.task(name='worker.scrape_reviews')
+def scrape_reviews(submission_id: str, url: str) -> None:
+    # Implementation for robust scraping
+    scraped_data = asyncio.run(scrape_amazon_data(submission_id, url))
+    # Process and store results in Supabase
+```
+
+3. **Analysis Tasks (tasks.py)**
+   - Defines tasks for analyzing scraped data
+   - Integrates with DeepSeek API for sentiment analysis
+   - Formats and stores analysis results in Supabase
+
+```python
+# tasks.py
+@shared_task(name="worker.analyze_reviews")
+def analyze_reviews(submission_id: Union[str, Dict], url: str = None) -> Dict[str, Any]:
+    # Extract submission_id if a dictionary was passed from the previous task
+    if isinstance(submission_id, dict) and 'submission_id' in submission_id:
+        submission_id = submission_id.get('submission_id')
+        
+    # Analyze reviews in Supabase
+    # Process with DeepSeek API
+    # Store results
+```
+
+4. **Scheduled Tasks (recurring_scheduler.py)**
+   - Manages recurring analyses and schedules
+   - Runs on configured intervals (daily, weekly, etc.)
+   - Creates new submissions for scheduled analyses
+
+## Task Callback Chain
+
+RivalRecon implements a sophisticated callback chain where completion of one task automatically triggers dependent tasks:
+
+1. `worker.scrape_reviews` is triggered by Node.js when a submission is created
+2. Upon successful completion, it triggers `worker.analyze_reviews` via callback
+3. Each task updates the submission status in Supabase appropriately
+
+### Callback Chain Implementation
+
+For the callback chain to work correctly, tasks must:
+
+1. Pass the `submission_id` through the entire chain
+2. Handle various parameter formats (string vs dictionary results)
+3. Use consistent error handling that doesn't break the chain
+
+## Database Schema (Supabase)
+
+The Supabase database contains the following key tables:
+
+1. **submissions**
+   - `id` (UUID): Primary key
+   - `url` (text): Product URL to analyze
+   - `user_id` (UUID): FK to auth.users
+   - `status` (text): Current status (pending, processing, completed, failed)
+   - `product_title` (text): Extracted product title
+   - `product_description` (text): Extracted product description
+   - `created_at` (timestamp): Creation timestamp
+
+2. **reviews**
+   - `id` (UUID): Primary key
+   - `submission_id` (UUID): FK to submissions
+   - `review_text` (text): Review content
+   - `review_rating` (numeric): Rating (1-5)
+   - `review_date` (timestamp): When review was posted
+   - `created_at` (timestamp): When review was scraped
+
+3. **analyses**
+   - `id` (UUID): Primary key
+   - `submission_id` (UUID): FK to submissions
+   - `sentiment_score` (numeric): Overall sentiment score
+   - `sentiment_distribution` (jsonb): Distribution of sentiment types
+   - `keywords` (jsonb): Extracted keywords
+   - `key_insights` (jsonb): Generated insights
+   - `created_at` (timestamp): Analysis timestamp
+
+## Environment Setup
+
+The application requires specific environment variables set in the project root `.env` file:
+
+```
+# Database
+SUPABASE_URL=https://yqpyrnnxswvlnuuijmsn.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+# Message Queue
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/0
+
+# External Services
+DEEPSEEK_API_KEY=your-deepseek-api-key
+RAPIDAPI_KEY=your-rapidapi-key
+```
+
+## Starting the System
+
+To start the complete system:
+
+1. **Start Redis Server**
+   ```bash
+   redis-server
+   ```
+
+2. **Start Node.js Backend**
+   ```bash
+   cd /Users/abmccull/Rival Recon3/backend
+   node index.js
+   ```
+
+3. **Start Celery Worker**
+   ```bash
+   cd /Users/abmccull/Rival Recon3/backend
+   source venv/bin/activate
+   PYTHONPATH=/Users/abmccull/Rival\ Recon3 celery -A worker.celery_app.app worker --loglevel=info
+   ```
+
+4. **Start Celery Beat (Optional - for scheduled tasks)**
+   ```bash
+   cd /Users/abmccull/Rival Recon3/backend
+   source venv/bin/activate
+   PYTHONPATH=/Users/abmccull/Rival\ Recon3 celery -A worker.celery_app.app beat --loglevel=info
+   ```
+
+## Troubleshooting Common Issues
+
+1. **Task Not Found Errors**
+   - Ensure task names match exactly between Node.js and Python
+   - Check that all required modules are included in Celery config
+   - Verify task decorators use the correct naming scheme
+
+2. **Parameter Order Issues**
+   - Python task functions should handle parameter order defensively
+   - Extract submission_id from dictionary results in callback chains
+
+3. **Environment Variable Issues**
+   - Ensure `.env` file is in the project root
+   - Verify all required variables are set
+   - Check variable names match what code is looking for
+
+4. **Redis Connection Issues**
+   - Verify Redis server is running on the expected port
+   - Check CELERY_BROKER_URL matches the Redis instance
+
+5. **Supabase Schema Mismatch**
+   - Verify column names exist in actual Supabase tables
+   - Check data types match what code is attempting to store
+
+For more detailed guidance on specific components, refer to the following documents:
+- [CELERY_WORKER_SETUP.mdc](/Users/abmccull/Rival Recon3/.cursor/rules/CELERY_WORKER_SETUP.mdc)
+- [CALLBACK_CHAIN_HANDLING.mdc](/Users/abmccull/Rival Recon3/.cursor/rules/CALLBACK_CHAIN_HANDLING.mdc)
+- [CELERY_MESSAGING.mdc](/Users/abmccull/Rival Recon3/.cursor/rules/CELERY_MESSAGING.mdc)
+
+---
+
+This document was last updated on: May 1, 2025
